@@ -154,7 +154,9 @@
         changes what every other session sees. Right after
         `git worktree add`, run `git submodule update --init --recursive`:
         a new worktree leaves submodules uninitialized even when the build
-        needs them. An isolation worktree belongs to the session's repo,
+        needs them. `index/` is no longer among them -- it is ordinary
+        tracked files in ix since ix#9290 -- so a change to it is an
+        ordinary ix commit needing no second repository. An isolation worktree belongs to the session's repo,
         not necessarily your task's: verify its origin, and when the task
         targets another repo, add your own worktree of the target
         checkout. Unmerged branches are unfinished for reasons you may
@@ -343,7 +345,11 @@
       topics = ["workflow"];
       text = ''
         Real work starts from an issue, referenced in branch and PR. File
-        friction as it happens, in the owning repo, with the exact error.
+        friction as it happens, with the exact error, always in ix --
+        including friction you hit in `index/`. The public
+        `indexable-inc/index` repository is a read-only projection of
+        `ix:index/`; its issues are the inbox for outside reports, and
+        nothing filed there reaches the people who can fix it.
         On finding an issue separate from the task at hand, file it and in
         the same breath spawn a background subagent to fix it, the issue
         number in its brief and branch; filing without dispatching is a
