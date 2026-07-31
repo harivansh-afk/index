@@ -236,37 +236,6 @@
     packageTestEnv = rawArgs.packageTestEnv or {};
     testRunPrelude = rawArgs.testRunPrelude or "";
 
-    # Every per-package table below is consumed in the rendered units file as
-    # `<table>.${packageName} or <empty>`, so a key that names no package in
-    # the graph is silently dropped: the value never reaches a unit and the
-    # build still succeeds, which is how a `packageBuildEnv` scoping fix can
-    # be a complete no-op with zero signal (ENG-10675 -- and the whole point
-    # of `packageBuildEnv` is that the workspace-wide fallback is gone, so
-    # there is nothing left to make the miss visible). Default-deny on the
-    # keys instead.
-    #
-    # The universe is every package name in the lock, which covers workspace
-    # members and vendored dependencies alike (`packageBuildEnv.libsqlite3-sys`
-    # is a vendored crate). It is a superset of the names the renderer actually
-    # tags units with -- a lock entry gated behind a cfg the graph never
-    # resolves is accepted here -- because the exact set only exists after the
-    # render IFD, and a typo is what this catches. Reading the lock is a plain
-    # `importTOML` of a path, so it costs no IFD and fails in seconds.
-    cargoLockPackageNames = lib.unique (
-      map (package: package.name) (lib.importTOML context.cargoLockPath).package
-    );
-    packageBuildEnv = rawArgs.packageBuildEnv or {};
-    packageRustcArgs = rawArgs.packageRustcArgs or {};
-    unknownPackageKeyProblems = label: table:
-      map (
-        packageName: "${label}.${packageName} is not a package in Cargo.lock"
-      ) (filter (packageName: !(elem packageName cargoLockPackageNames)) (attrNames table));
-    packageTableProblems =
-      unknownPackageKeyProblems "packageBuildEnv" packageBuildEnv
-      ++ unknownPackageKeyProblems "packageRustcArgs" packageRustcArgs
-      ++ unknownPackageKeyProblems "packageTestInputs" packageTestInputs
-      ++ unknownPackageKeyProblems "packageTestEnv" packageTestEnv;
-
     # Every injected unit plus everything reachable from one through
     # `passthru.depUnits` (recorded by `mkPrebuiltLibraryUnit`), deduplicated
     # by derivation. A recorded dep whose unit key the caller explicitly
@@ -651,7 +620,8 @@
             packageTestInputs
             packageTestEnv
             ;
-          inherit packageBuildEnv packageRustcArgs;
+          packageBuildEnv = rawArgs.packageBuildEnv or {};
+          packageRustcArgs = rawArgs.packageRustcArgs or {};
           inherit extraRustcArgsForPlatform extraLinkRustcArgsForPlatform;
           # Manifest-derived flags come first so per-call `policy.clippy`
           # entries land later in argv and can override them. Cargo's
@@ -752,16 +722,7 @@
       ++ injectionUnitKeyMismatchProblems
       ++ depUnitConflictProblems;
 
-    units = assert lib.assertMsg (packageTableProblems == []) ''
-      cargoUnit.buildWorkspace: per-package table names package(s) that are not
-      in Cargo.lock:
-      ${lib.concatMapStringsSep "\n" (problem: "  - ${problem}") packageTableProblems}
-      A per-package table is looked up by Cargo package name, so an unknown key
-      is silently ignored and its value reaches no unit at all (ENG-10675).
-      Check the spelling against the crate's own `[package] name`, which need
-      not match the directory or the package registry id.
-    '';
-    assert lib.assertMsg (injectionProblems == []) (
+    units = assert lib.assertMsg (injectionProblems == []) (
       "cargoUnit.buildWorkspace: invalid prebuilt-unit injection:\n"
       + lib.concatStringsSep "\n" injectionProblems
     );
@@ -778,32 +739,10 @@
           extraLibraries = {};
         }
       else {};
-    # `policy.clippy.packages = null` gates every package; a list gates only
-    # those. See the option in policy.nix for why the boundary lives there.
-    clippyPackages = args.policy.clippy.packages;
-    # An allowlist entry that matches no package is a silent no-op, and the
-    # thing it silently disables is the gate the allowlist exists to guarantee.
-    # A rename or a typo would otherwise turn a lint gate off without turning
-    # anything red. Listing the real names matters as much as naming the
-    # offender, because two spellings are in play: this attrset is keyed by
-    # cargo PACKAGE name (`jj-views`), while the unit keys next door carry the
-    # lib TARGET name (`jj_views-0.43.0-<hash>`). "jj_views is not a package"
-    # is useless without the list that shows the hyphen.
-    unknownClippyPackages =
-      lib.subtractLists (attrNames clippyUnits.clippyByPackage)
-      (lib.optionals (clippyPackages != null) clippyPackages);
-    gatedClippyByPackage = assert lib.assertMsg (unknownClippyPackages == []) ''
-      cargoUnit.buildWorkspace: policy.clippy.packages names ${toString (length unknownClippyPackages)} package(s) this workspace does not build: ${lib.concatStringsSep ", " unknownClippyPackages}
-      available: ${lib.concatStringsSep ", " (attrNames clippyUnits.clippyByPackage)}
-    '';
-      if clippyPackages == null
-      then clippyUnits.clippyByPackage
-      else lib.filterAttrs (name: _: elem name clippyPackages) clippyUnits.clippyByPackage;
-
     workspaceUnits =
       units
       // lib.optionalAttrs perUnitClippyEnabled {
-        clippyByPackage = gatedClippyByPackage;
+        inherit (clippyUnits) clippyByPackage;
       };
 
     targetSetNames = let
@@ -1140,11 +1079,10 @@
   the same `<hash>` as the real prebuilt, so injecting this unit links a
   downstream crate against a prebuilt rlib with no source present.
 
-  Scope: Rust library crate types only -- `rlib`, `dylib`, or both. A `cdylib`
-  or `staticlib` is out of scope because its consumer is a C linker or an FFI
-  host rather than a `--extern`, so an injected one would produce a unit no
-  downstream crate can reference; a `proc-macro` is out of scope because the
-  compiler loads it, so it has to match the host toolchain and not the target.
+  Scope: this is for plain `rlib` libraries only. The artifact name and
+  `extern-path` hardcode `.rlib`, so a `cdylib`, `staticlib`, or `proc-macro`
+  crate (different artifact extension, and proc-macros load as host dylibs) is
+  out of scope and would not link.
 
   Trust boundary: an injected prebuilt unit BYPASSES every per-unit policy gate
   (clippy, `--deny-panics`, unused-crate-dependencies) because those gates run
@@ -1167,16 +1105,8 @@
   - `hash`: the source-independent unit hash. Must equal the `<hash>` the
     renderer computes for the metadata-faithful stub the downstream graph sees,
     or the downstream `--extern`/`-L` references will not resolve to this unit.
-  - `rlib`: path to the compiled `.rlib` artifact, or `null` for a crate whose
-    only library crate type is `dylib` (`dylib` must then be given).
+  - `rlib`: path to the compiled `.rlib` artifact.
   - `rmeta`: path to the compiled `.rmeta` artifact.
-  - `dylib`: optional path to the compiled shared library (`.so`, `.dylib` or
-    `.dll`) for a crate whose crate types include `dylib`. Required whenever the
-    consuming graph's unit declares `dylib`: rustc picks between an rlib and a
-    dylib per consumer, so a consumer of a dylib unit is passed both artifacts,
-    and a prebuilt that omits this one is silently linked statically -- which,
-    for the crates a dylib is used for, means several copies of a crate's
-    process-global state in one process.
   - `toolchainId`: the toolchain id the prebuilt was compiled with. Asserted
     equal to `baseNameOf (toString rustToolchain)` so a toolchain mismatch
     fails at eval, never at link time. Also recorded in `passthru.toolchainId`
@@ -1210,7 +1140,6 @@
     hash,
     rlib,
     rmeta,
-    dylib ? null,
     toolchainId,
     rustToolchain ? rust.defaultRustToolchain,
     depUnits ? [],
@@ -1220,17 +1149,6 @@
     # (`render.rs:1376`). Mirror that exactly so the rlib filename and the
     # `extern-path` contents match what a from-source unit would produce.
     libName = replaceStrings ["-"] ["_"] pname;
-    # Keep the caller's extension: a consumer resolves this file through the
-    # `DT_NEEDED`/install name recorded in it, which names the platform's own
-    # spelling.
-    dylibExtension =
-      if dylib == null
-      then ""
-      else lib.head (filter (suffix: lib.hasSuffix suffix (toString dylib)) [".so" ".dylib" ".dll"]);
-    rlibPath = "$out/lib/lib${libName}-${hash}.rlib";
-    dylibPath = "$out/lib/lib${libName}-${hash}${dylibExtension}";
-    externPaths = lib.optional (rlib != null) rlibPath ++ lib.optional (dylib != null) dylibPath;
-    preferredExternPath = lib.head externPaths;
   in
     assert lib.assertMsg (toolchainId == expectedToolchainId) ''
       cargoUnit.mkPrebuiltLibraryUnit: toolchainId mismatch for `${pname}`.
@@ -1238,24 +1156,12 @@
         this workspace's toolchain: ${expectedToolchainId}
       A prebuilt rlib/rmeta only links against the toolchain that produced it.
     '';
-    # The artifact set this builder can express is rlib, rmeta and dylib: the
-    # three a Rust library unit publishes for another Rust crate to link.
-    # `cdylib` and `staticlib` are deliberately still refused -- their consumer
-    # is a C linker or an FFI host, not a `--extern`, so injecting one here
-    # would produce a unit no downstream crate can reference. A proc-macro is
-    # refused for the same reason plus a different one: it is loaded by the
-    # compiler, so it must match the host toolchain rather than the target.
-    assert lib.assertMsg (rlib != null || dylib != null) ''
-      cargoUnit.mkPrebuiltLibraryUnit: `${pname}` must provide `rlib`, `dylib`, or both.
-    '';
-    assert lib.assertMsg (rlib == null || lib.hasSuffix ".rlib" (toString rlib)) ''
+    # M2: this builder is rlib-only (the filename and extern-path hardcode
+    # `.rlib`). Reject an artifact that is clearly not an rlib/rmeta so a
+    # cdylib/staticlib/proc-macro mistake fails loud at eval, not at link.
+    assert lib.assertMsg (lib.hasSuffix ".rlib" (toString rlib)) ''
       cargoUnit.mkPrebuiltLibraryUnit: `rlib` for `${pname}` must be a .rlib path; got ${toString rlib}.
-      Only rlib and dylib libraries are supported (not cdylib/staticlib/proc-macro).
-    '';
-    assert lib.assertMsg (
-      dylib == null || lib.any (suffix: lib.hasSuffix suffix (toString dylib)) [".so" ".dylib" ".dll"]
-    ) ''
-      cargoUnit.mkPrebuiltLibraryUnit: `dylib` for `${pname}` must be a .so/.dylib/.dll path; got ${toString dylib}.
+      Only plain rlib libraries are supported (not cdylib/staticlib/proc-macro).
     '';
     assert lib.assertMsg (lib.hasSuffix ".rmeta" (toString rmeta)) ''
       cargoUnit.mkPrebuiltLibraryUnit: `rmeta` for `${pname}` must be a .rmeta path; got ${toString rmeta}.
@@ -1289,20 +1195,10 @@
       }
       ''
         mkdir -p "$out/lib" "$out/nix-support"
-        ${lib.optionalString (rlib != null) ''
-          cp ${lib.escapeShellArg (toString rlib)} "$out/lib/lib${libName}-${hash}.rlib"
-        ''}
-        ${lib.optionalString (dylib != null) ''
-          cp ${lib.escapeShellArg (toString dylib)} "$out/lib/lib${libName}-${hash}${dylibExtension}"
-        ''}
+        cp ${lib.escapeShellArg (toString rlib)} "$out/lib/lib${libName}-${hash}.rlib"
         cp ${lib.escapeShellArg (toString rmeta)} "$out/lib/lib${libName}-${hash}.rmeta"
-        # Same artifact priority as the renderer's install phase: the rlib is the
-        # single preferred artifact, and `extern-paths` carries every linkable
-        # one in the same order, because only rustc can pick between them.
-        printf '%s\n' "${preferredExternPath}" > "$out/nix-support/extern-path"
-        ${lib.optionalString (dylib != null) ''
-          printf '%s\n' ${lib.concatMapStringsSep " " (path: ''"${path}"'') externPaths} > "$out/nix-support/extern-paths"
-        ''}
+        # Same artifact priority as render.rs:1387-1398 (.rlib wins over .rmeta).
+        printf '%s\n' "$out/lib/lib${libName}-${hash}.rlib" > "$out/nix-support/extern-path"
         ${lib.concatMapStringsSep "\n" (
             dep: ''printf '%s\n' ${lib.escapeShellArg (toString dep)} >> "$out/nix-support/dependency-units"''
           )

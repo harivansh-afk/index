@@ -77,22 +77,21 @@ defmodule IxMcp.Agents.Backend do
 
   defp claude(opts, extra_env) do
     args =
-      Keyword.get(opts, :launcher_args, []) ++
-        [
-          "-p",
-          "--input-format",
-          "stream-json",
-          "--output-format",
-          "stream-json",
-          "--verbose",
-          "--strict-mcp-config",
-          "--mcp-config",
-          @empty_mcp,
-          "--disallowedTools",
-          @claude_deny,
-          "--permission-mode",
-          Keyword.get(opts, :permission_mode, "acceptEdits")
-        ] ++
+      [
+        "-p",
+        "--input-format",
+        "stream-json",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--strict-mcp-config",
+        "--mcp-config",
+        @empty_mcp,
+        "--disallowedTools",
+        @claude_deny,
+        "--permission-mode",
+        Keyword.get(opts, :permission_mode, "acceptEdits")
+      ] ++
         model_args(Keyword.get(opts, :model)) ++
         resume_args(Keyword.get(opts, :resume)) ++
         allowed_args(Keyword.get(opts, :allowed_tools))

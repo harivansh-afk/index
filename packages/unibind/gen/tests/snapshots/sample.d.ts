@@ -7,13 +7,12 @@ import type { Buffer } from "node:buffer";
 /** A row. */
 export interface SampleRow {
   /** Identifier. */
-  readonly id: number;
-  readonly rowLabel: string;
-  readonly tags: Array<string>;
-  readonly weights: Record<string, number>;
-  readonly blob: Buffer;
-  readonly chunks: Array<Array<number>>;
-  readonly home?: string | null;
+  id: number;
+  rowLabel: string;
+  tags: Array<string>;
+  weights: Record<string, number>;
+  blob: Array<number>;
+  home?: string | null;
 }
 
 /** Boundary failures. */
@@ -46,12 +45,6 @@ export declare class Counter {
   value(): number;
   /** Add and return the new value. */
   addSlowly(amount: number, signal?: AbortSignal): Promise<number>;
-  /** Every value the counter takes. */
-  watch(): UnibindStream<number>;
-  /** Labels under `prefix` (async, throwing, renamed). */
-  tailRows(prefix: string, limit?: number, signal?: AbortSignal): Promise<UnibindStream<string>>;
-  /** Fork a counter. */
-  fork(): Counter;
   /** Release the counter. */
   close(): Promise<void>;
   /** `await using` support: closes the resource. */
@@ -81,4 +74,3 @@ export declare function tailLater(store: string, signal?: AbortSignal): Promise<
 
 /** Open a counter from a free function. */
 export declare function openCounter(start?: number): Counter;
-

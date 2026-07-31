@@ -19,28 +19,31 @@ cannot do: `paths.examples` is a separate `flake = false` subtree and has no
 ix apply .#dev
 ```
 
-Iterating on the in-tree index source rather than the published mirror (run
-from the ix repository root so both paths stay inside the uploaded source):
+Iterating on the index checkout rather than the published flake:
 
 ```sh
-ix apply \
-  --workdir index/users/harivansh-afk/dev \
-  --override-input index=index \
-  .#dev
+ix apply --override-input index path:../../.. .#dev
 ```
 
 ## Connect
 
 ```sh
-ix shell dev
+mosh hari@<address>
 ```
 
-This path works from every ix client and does not depend on a public IPv4.
-The VM still runs sshd and mosh, and `ix ls` prints its public IPv6 address.
-On a client with IPv6 connectivity, `mosh hari@<address>` remains available;
-mosh sshs in only to start `mosh-server`, then uses UDP so the session survives
-roaming between networks and a closed lid. sshd is key-only, root login is
-off, and Hari's laptop public key is the only authorized key.
+`ix ls` prints the address. mosh sshs in only to start `mosh-server`; the
+session itself is UDP, so it survives roaming between networks and a closed
+lid. A bare `mosh <host>` is deliberate: the home module's zsh shim rewrites
+that exact form to auto-attach `mux`, so one command lands in the
+per-project session rather than a fresh shell. Adding a `Host` block to
+`~/.ssh/config` on the client is what turns `<address>` into a name.
+
+The VM takes a public IPv4 (`ix.networking.ipv4`), which
+[`dev.nix`](dev.nix) explains: mosh is UDP, and neither private path
+reaches it from a Mac — `ix net up` is Linux-only and `ix port-forward` is a
+single-port debug tunnel. sshd is therefore key-only, root login off,
+password and keyboard-interactive auth both off, with his laptop public key
+the only authorized key.
 
 ## Secrets
 

@@ -74,44 +74,28 @@
       topics = ["writing"];
       text = ''
         Never write a zinger: a sentence built to land as a punchline gets
-        flattened into a plain claim. Read your opening sentence alone: a
-        verdict still states a claim; "It isn't X. It's Y." does not.
-        Front-load the claim, not the rhythm. Never write a rhetorical
-        triad; three parallel items ("fast, simple, and correct") lose one
-        or gain a fourth. A superlative ("best", "blazing", "massive") is
-        replaced by the measurement that would earn it, or cut. This covers
-        everything you write: replies, commit messages, PR bodies, docs,
-        site updates.
+        flattened into a plain claim. Never write a rhetorical triad; three
+        parallel items ("fast, simple, and correct") lose one or gain a
+        fourth. A superlative ("best", "blazing", "massive") is replaced by
+        the measurement that would earn it, or cut. This covers everything
+        you write: replies, commit messages, PR bodies, docs, site updates.
       '';
       reason = ''
         Requested 2026-07-23: prose sets the register and calibratedClaims
         handles absolutes, yet punch-up devices kept appearing in agent
         prose. Lands as its own rule since style governs code as well as
         prose; the shape follows noEmDashes, one register ban stated once.
-        The reading test was added 2026-07-31 after "It isn't projected.
-        It's the tail." went to a user: the ban named an intent, which no
-        one can check, so answerIntent's verdict-first compression kept
-        producing the punchline shape. The test names a property of the
-        sentence instead.
       '';
     };
   }
   {
     promptSource = {
       text = ''
-        These rules live at `index/packages/agent-prompt/rules.nix` in the ix
-        repo. Edit them there; rendered copies are overwritten. The public
-        `indexable-inc/index` repository is a read-only projection of
-        `ix:index/`, so editing its copy of this file looks like it worked
-        and is erased by the next publish.
+        These rules live at `packages/agent-prompt/rules.nix` in the index
+        repo. Edit them there; rendered copies are overwritten.
       '';
       reason = ''
-        Agents edited rendered copies that the next build overwrote. Restated
-        2026-08-01: the path said "the index repo", which was true when index
-        was its own repository and became a trap once index turned into a
-        projection of `ix:index/` (ENG-11800). Three agents in one session
-        followed this sentence exactly and edited the mirror, and one of them
-        was the session that briefed the fix.
+        Agents edited rendered copies that the next build overwrote.
       '';
     };
   }
@@ -170,20 +154,12 @@
         changes what every other session sees. Right after
         `git worktree add`, run `git submodule update --init --recursive`:
         a new worktree leaves submodules uninitialized even when the build
-        needs them. `index/` is no longer among them -- it is ordinary
-        tracked files in ix since ix#9290 -- so a change to it is an
-        ordinary ix commit needing no second repository. An isolation worktree belongs to the session's repo,
+        needs them. An isolation worktree belongs to the session's repo,
         not necessarily your task's: verify its origin, and when the task
         targets another repo, add your own worktree of the target
-        checkout. A repo with no colocated `.git` fails
-        `git worktree add`. Keep the path and change the command:
-        `git clone --filter=blob:none <origin>
-        /tmp/worktree/<org>/<repo>/<name>`. Use a `jj workspace` instead
-        when you need the repo's own operation log. Never point
-        `git worktree add` at `.jj/repo/store/git`: that store is jj's,
-        other sessions read it, and a worktree writes metadata into it.
-        Unmerged branches are unfinished for reasons you may not see; check for
-        open PRs touching a file before nontrivial edits.
+        checkout. Unmerged branches are unfinished for reasons you may
+        not see; check for open PRs touching a file before nontrivial
+        edits.
       '';
       reason = ''
         Primary-checkout edits collided with concurrent work; parallel
@@ -200,17 +176,7 @@
         2026-07-29 at the operator's request: "the first action in any
         repo" reads as a rule about entering a repo, so an agent already
         mid-session asked for a one-line fix does not see itself covered.
-        No size or urgency exemption exists. Extended on 2026-07-31 for
-        repos with no colocated git: the shared checkouts of nix, ix and
-        index all carry `.jj` and no `.git`, so `git worktree add` fails
-        outright in each, and three agents in one session invented three
-        different substitutes for it. The filtered clone is named because
-        it is the one that keeps the standardized path. Worktreeing
-        `.jj/repo/store/git` is called out separately because it looks
-        like the obvious way through and is not: writing into a store
-        other sessions read is the same class of mistake as deleting a
-        shared checkout's `.git`, which destroyed another agent's
-        worktrees the same day (ENG-11676).
+        No size or urgency exemption exists.
       '';
     };
   }
@@ -234,158 +200,17 @@
     verificationProportionality = {
       topics = ["verification"];
       text = ''
-        Scale verification to the stakes, on one test: what a wrong answer
-        costs to undo. The cheap side is a closed list, meaning a path, a
-        name, a flag's spelling, whether a file exists, each of which the
-        next command would correct at no cost; those take one direct check
-        or none. Everything else takes the strongest source whatever it
-        costs, and a fact you cannot place on that list is already
-        everything else. Nothing reaching a merge, a deploy, a destructive
-        command, a number in a report, or a claim that work is done is ever
-        on it. A one-off explanation checks its load-bearing facts and
-        stops: no browser session, no subagent fan-out, no fleet reads to
-        settle a side point. Where a side point costs more to verify than
-        it is worth, answer the likeliest reading and name the assumption.
+        Scale verification to the stakes. A one-off explanation checks its
+        load-bearing facts and stops: no browser session, no subagent
+        fan-out, no fleet reads to settle a side point. The full apparatus
+        is for deliverables, meaning code, reports, and anything acted on
+        or kept. Where a side point costs more to verify than it is worth,
+        answer the likeliest reading and name the assumption.
       '';
       reason = ''
         A session answering a quick explanation reached for agent-browser,
         including the fresh-browser fallback, to settle which GitHub
         Projects boards exist; user asked for proportionality (index#4466).
-
-        The cost-to-undo test was added 2026-08-01 at the user's request.
-        "Scale to the stakes" named no scale, so a session either spent the
-        full apparatus on everything or picked a level by feel, and
-        confirming a file exists cost what confirming a merge landed cost.
-        Written as a closed list with everything else as the default,
-        rather than as "low stakes get less", because a threshold phrased
-        as a judgement is an exemption anyone can claim: the agent has to
-        name which listed kind of fact it has, and cannot reach the cheap
-        side by asserting the stakes are low. The verification rules
-        themselves are unchanged; they caught four errors the day this was
-        written, including a merge into a generated repository.
-      '';
-    };
-  }
-  {
-    noOpChecks = {
-      topics = ["verification"];
-      text = ''
-        A check must fail differently from a check that did not run. Before
-        trusting a green, name what the no-op path looks like and confirm it
-        is not this one: a skipped test that returns Ok, a grep whose subject
-        changed shape, a rollup field that reads pending as passing, a
-        verifier absent from the host it was meant to check, a wrapper
-        reporting its own exit code instead of the command's. Where a check
-        can be skipped, make the skip an outcome something counts, never
-        silence. Where it reads another tool, read that tool's state and not
-        its rendering. Report the share of subjects the check reached and the
-        share that then passed; either number alone is how this goes wrong. A
-        green also carries a scope, so name it: say which required contexts
-        the command you ran actually covers, and treat every context you did
-        not name as unverified. Take that list from the branch's ruleset and
-        never from a run's job list, which is a rendering: on ix `lint` and
-        `build` only mirror the `nix` result, so one failure shows up as
-        three. A passing bundle is not the checks outside it, one formatter
-        reporting no changes is that formatter only, and an ambient tool is
-        not the pinned one, which formats differently at another major
-        version. Print what a measurement read inside the measurement, not
-        beside it: the revision, path or binary under test on the same line
-        as its result. A before-and-after that does not name the two things
-        it compared cannot tell a real difference from having measured one
-        thing twice, and that failure is silent and looks like an answer.
-      '';
-      reason = ''
-        2026-07-29: one sweep found eleven checks across two repos, all
-        landed in a single day, that passed or failed for a reason unrelated
-        to what they verify. Every one was caught by a person who already
-        knew the answer, none by a gate. The worst was a correctness bug and
-        not only a blind spot: nox fingerprints a dirty tree by hashing `git
-        diff --binary HEAD`, and this repo sets `diff.external difft`, so
-        that prints `Binary file modified (old: 2 KiB, new: 2 KiB)`, which is
-        byte-identical for two different binaries of the same size. The eval
-        and NAR caches then served the wrong tree's digest under a module
-        header promising never a wrong hit.
-
-        Deliberately its own rule. validate covers a wrapper reporting zero
-        for a check that did run, and classOverInstance covers preferring a
-        gate to a patch; neither covers a check that never ran, or a rendered
-        summary read in place of the state behind it. The coverage clause
-        generalises past continuous integration: the house rules already
-        carry that shape for ClickHouse joins, where an unmatched ASOF row
-        fills with zeros rather than nulls, and reporting one number instead
-        of two produced three confidently wrong measurements.
-
-        The wrapper clause was added a day later, after two more instances
-        the same afternoon. A background `nix build ... > out 2>&1; echo
-        "rc=$?" >> out` exited 0 while the build inside it exited 1, and the
-        task notification read "completed (exit code 0)"; only reading the
-        file caught it. A runner-liveness check returned 404 identically for
-        a healthy runner and a dead one. Both were greens that meant nothing.
-
-        The scope clause was added 2026-08-01, and it is a third failure
-        rather than a restatement of the two above. Those cover a check that
-        never ran, and a rendering read in place of state. This one is a
-        check that ran, passed, and was true, used to support a claim wider
-        than what it covers.
-
-        Three instances in one night, each a real green: `just lint` passed
-        while the failure was an eval seam the lint bundle does not contain;
-        `nix flake metadata` exercised a fetcher change end to end while
-        formatting is not in it; a formatter reported zero changes while the
-        failing check was a different formatter's derivation. A fourth was
-        this rule's own session: `just lint` was green on every branch, and
-        the per-crate clippy gate then found three real defects, because
-        `clippy` appears nowhere in `nix/checks/lint.nix`.
-
-        Written as naming the covered contexts rather than "run the real
-        gate", because the failure is running a real gate that happens to
-        exclude the thing that breaks, and because a named list is checkable
-        in review where "I ran the gate" is not.
-
-        The pinned-tool clause is the second level of the same trap, caught
-        by an agent before it cost a second round trip: the nix fork pins
-        `pkgs.llvmPackages_21.clang-tools` for its pre-commit hook
-        (`maintainers/flake-module.nix`), so an ambient `clang-format` of
-        another major version formats differently, and would have passed
-        locally and failed again in CI for the same reason twice. The cost of
-        doing it right is small and known: one command, a couple of minutes,
-        against a round trip through CI.
-
-        Naming the ruleset as the source was added a day later, found by
-        rules-remedy: the clause above says to enumerate the required
-        contexts, and the obvious place to read them is wrong. ix's ruleset
-        declares exactly `lint`, `nix` and `build`. Of those, `lint` is a job
-        with `needs: nix` whose only step mirrors `needs.nix.outputs
-        .lint_result`, and `build` is a fan-in over every phase. So one `nix`
-        failure paints three contexts red, which was read off a run as three
-        separate failures on ix#9432, and would just as easily be read the
-        other way as three contexts covered when one is.
-
-        That ruleset carries `enforcement: disabled`, so those three are
-        declared and not enforced. They are still the list to enumerate
-        against: they are what the repository says its gate is, and what it
-        would enforce the moment the setting flips.
-
-        Printing the subject inside the measurement was added 2026-08-02,
-        after three instruments lied in one session, each differently, each
-        fixable the same way.
-
-        A before-and-after of a formatting fix ran `git reset --hard
-        origin/main` while standing on the branch under test, which moved the
-        branch ref, so both halves linted `main` and the fix read as broken.
-        The two lines carried the same commit hash, which is the only reason
-        it was caught, and the hash was there because the author had chosen
-        to print it. A cost measurement of a lock was taken uncontended and
-        understated the real figure by 25x. A comparison of clippy finding
-        counts across runs of a derivation that deduplicates against the
-        store weighed a fresh run against a cached one, and its conclusion
-        held by luck.
-
-        Stated as printing the subject rather than as "check your
-        measurement", because this shape has no error and no red: every one
-        of those produced a clean, plausible number. What separates them from
-        a real result is whether the output says what it read, which costs
-        one `echo`.
       '';
     };
   }
@@ -413,19 +238,11 @@
       text = ''
         `nix store builds --json` lists every in-flight daemon build
         machine-wide (patched nix; confirm with `nix store builds --help`).
-        A build that already finished printed an invocation id on exit, and
-        `nix invocation show <id>` reports its evaluation cost and
-        per-derivation durations with the machine each one ran on. Read that
-        rather than running the build again to watch it.
       '';
       reason = ''
         Agents guessed at daemon state after observability shipped (nix
         2.34.7+ix). Also the only runtime-tagged rule; the provider-prompts
-        tests assert the tag axis through it. The invocation clause landed
-        with indexable-inc/nix#6: sessions re-ran a finished build to see what
-        it did, which pays for the build twice and still misses whatever
-        scrolled past. Held until that PR ships, since the command does not
-        exist before then.
+        tests assert the tag axis through it.
       '';
     };
   }
@@ -433,24 +250,16 @@
     costFloor = {
       topics = ["verification"];
       text = ''
-        Before calling something slow or wasteful, derive the quantity it
-        should have had and report it beside the observed one, with the
-        ratio. A duration's floor comes from the machine: bytes moved over
-        measured throughput, work units over cores times measured per-unit
-        cost, with the constants measured on the device (throughput to that
-        disk and that endpoint, core count, memory bandwidth) or the floor
-        is a guess with arithmetic on it. A count's comes from the structure
-        and usually needs no run at all: how many derivations a four-file
-        change can reach, how many of those the cache already holds, how
-        many attributes get evaluated that the change cannot reach, how many
-        round trips and spawned processes. Compute the counts first, because
-        a profile apportions time inside the work that ran and is blind to
-        work that should not have run. "872s against a 60s floor, 14x" says
-        how much is recoverable and when to stop, and near 1x there is
-        nothing to recover; a count many times its expectation points at a
-        mechanism instead. Name the resource or the structural path you
-        think is binding: an expectation from the wrong model is worse than
-        none, and an observation on the impossible side of it means the
+        Before calling something slow, derive its floor from the machine:
+        bytes moved over measured throughput, work units over cores times
+        measured per-unit cost. Report the floor and the ratio, not the
+        observed time. "872s against a 60s floor, 14x" says how much is
+        recoverable and when to stop; "872s" says neither, and near 1x there
+        is nothing to recover. Measure the constants on the device
+        (throughput to that disk and that endpoint, core count, memory
+        bandwidth), or the floor is a guess with arithmetic on it. Name the
+        resource you think is limiting: a floor from the wrong bottleneck is
+        worse than none, and an observed time below your floor means the
         model is wrong.
       '';
       reason = ''
@@ -458,22 +267,11 @@
         not separate a run near its physical limit from one with a defect,
         and neither could the agent that wrote the number. Sits beside
         nixPlanShape because that rule is this judgment applied to one tool,
-        and general before specific is the order a reader wants. Dropped a
-        clause asking for the breakdown as a stacked bar, since
-        statusPageOutput already owns the response surface.
-
-        Recast 2026-07-29 (ENG-11190) from a floor on time to an expectation
-        on any derived quantity, because the first version only covered time
-        against a rate. A count is the cheaper question and often the only
-        one that finds the defect: a change touching four files has a
-        computable set of dependents, so two thousand rebuilds is the finding
-        and no throughput analysis reaches it. Recast rather than added
-        beside, since a second rule restating this one is what the header
-        forbids. Still distinct from firstPrinciples: that rule says do not
-        inherit a claim about behavior from precedent, this one says which
-        number to compute and report. Merging them would put two unrelated
-        actions under one key and cost firstPrinciples its scope line against
-        style.
+        and general before specific is the order a reader wants. Distinct
+        from firstPrinciples, which scopes itself to claims about behavior:
+        this one says which number to compute and report. Dropped a clause
+        asking for the breakdown as a stacked bar, since generativeUiOutput
+        already owns the response surface.
       '';
     };
   }
@@ -505,47 +303,6 @@
         changed in 34 of 59 consecutive generation pairs and 29 of those 34
         normalized to byte identical, so most of the handoff cost that caps
         fleet auto-deploy at a 6 hour timer is a store path moving.
-      '';
-    };
-  }
-  {
-    nixCheckoutLoop = {
-      topics = ["verification" "tooling"];
-      text = ''
-        Editing the nix fork's C++: `nix-dev-build` recompiles only what
-        changed, 2 to 9s for a one-file edit, where a whole-package `nix build`
-        recompiles the closure. That cost is set by the translation unit, not by
-        `-j`, since one file rebuilds serially, and contention roughly doubles it:
-        report `real` beside `user`, because a one minute load average cannot
-        describe a seven second build. The first run configures meson inside the
-        checkout's own dev shell; later runs are ninja. Driving that loop by hand
-        calls `meson setup` and `ninja` directly, because `configurePhase` and
-        `buildPhase` are stdenv shell functions that `nix develop --command bash
-        -c` leaves undefined, failing with `configurePhase: command not found`. A
-        checkout build's `--version` carries no revision, so identify the binary
-        you measured by path and revision, never by version string.
-      '';
-      reason = ''
-        On 2026-07-29 four sessions iterated on the evaluator through a
-        whole-package `nix build`, recompiling the closure for each one-line
-        edit, while the fork's own manual documents the ninja loop. Measured on
-        an 18 core Mac: 11.9s to configure, 51.3s for the first build of all 332
-        targets, 0.1s for a no-op, and for a one-file edit 7.1 to 7.9s over three
-        runs on src/libexpr/eval.cc, 8.9s on primops.cc, 2.1s on nixexpr.cc. The
-        range is in the text because the translation unit dominates: a single
-        number invites the reader to treat their own file as the same cost. Two
-        sessions disagreed over whether load explained that spread, and two of
-        my own answers were wrong before the data settled it. Over ten timings of
-        one edit, real over user separates 6.36 to 9.38s from 12.33 to 15.78s
-        exactly, while the reported load ranges overlap: the fastest run sat at
-        load 39.24 and a 15.78s run at 24.90, because load average is a decaying
-        one minute mean describing a seven second event. `ninja -j1` costs almost
-        nothing over the default, which is why the flag is called useless. The
-        configurePhase clause is here because a session lost time to it the same
-        night: the manual names the phases and does not say they are undefined
-        outside an interactive shell. The version clause is here because the
-        packaged nix-ix prints its revision and a checkout build does not, so
-        two builds of two branches read the same and neither says which it is.
       '';
     };
   }
@@ -586,29 +343,17 @@
       topics = ["workflow"];
       text = ''
         Real work starts from an issue, referenced in branch and PR. File
-        friction as it happens, with the exact error, always in ix --
-        including friction you hit in `index/`. A Linear ticket is one
-        command, `linear-file --title <t> --label auto-filed` with the
-        description on stdin, which prints the identifier and URL as JSON;
-        never hand-build the GraphQL call, because a description carrying a
-        quote or a newline corrupts the payload and a blind retry after a
-        formatting error files a duplicate. The public
-        `indexable-inc/index` repository is a read-only projection of
-        `ix:index/`; its issues are the inbox for outside reports, and
-        nothing filed there reaches the people who can fix it.
-        On finding an issue separate from the task at hand, file it and
-        move on; dispatch a fixer subagent only when the issue blocks the
-        goal or the user asks. Filing is the floor. The goal is working
-        code on the task at hand, not a fleet of side-fixers.
+        friction as it happens, in the owning repo, with the exact error.
+        On finding an issue separate from the task at hand, file it and in
+        the same breath spawn a background subagent to fix it, the issue
+        number in its brief and branch; filing without dispatching is a
+        dropped ball unless the fix needs the user.
       '';
       reason = ''
         Root-cause notes died with sessions (#1941 through #1946); filed
         problems were forgotten even when filed (a deploy-verify defect sat
         as ix#8055 while its noise reddened every deploy). Sub-issue
-        mechanics moved to memories (index#3594). Amended 2026-07-31: the
-        same-breath dispatch mandate spent tokens and attention on side
-        quests while the main task waited, and duplicate dispatch was
-        already the observed failure mode (ix#8155, ix#8156).
+        mechanics moved to memories (index#3594).
       '';
     };
   }
@@ -747,7 +492,7 @@
       reason = ''
         Diagnosis ended at "upstream's problem" inside our own forks
         (index#3559, #3566). Authoring mechanics live in fork-patch memories
-        and the `forkBranches` rule (index#3594); the `rebase-patches`
+        and the `flatForkBranches` rule (index#3594); the `rebase-patches`
         driver that used to own them went with the megamerge migration.
         An agent worked around nix dropping a fast-failing derivation's log
         under a parallel build by moving its check to eval time and filing,
@@ -758,35 +503,25 @@
     };
   }
   {
-    forkBranches = {
+    flatForkBranches = {
       topics = ["architecture" "workflow"];
       text = ''
-        Fork repos keep one branch: `ix-patched` carries ordinary git
-        commits on the upstream base, one commit per patch, and the flake
-        input pins its tip. Use plain git. Do not reintroduce a jj
-        megamerge, a patch dependency graph, or an in-repo patch series;
-        put each change in a commit of its own on top.
-        The branch is published history: flake.locks pin its revs, so it
-        is never rewritten. When upstream moves, merge upstream into
-        `ix-patched` as an ordinary two-parent merge, resolving conflicts
-        in the merge commit; never rebase onto the new base. The delta
-        over upstream stays readable as
-        `git log upstream/main..ix-patched --first-parent --no-merges`.
-        Both flags are load-bearing, and dropping either is how
-        `upstream-sync` came to read three revisions of one home-manager
-        patch as three patches and die on their duplicate subject:
-        `--no-merges` drops the merge commits, and `--first-parent` drops
-        what those merges brought in, which includes any earlier revision of
-        a patch merged back to keep a rev some flake.lock pinned reachable.
-        A force-push is therefore exceptional, and one still needs a
-        permanent `refs/pins/<date>-<sha12>` ref for every rev a
-        flake.lock has ever pinned, in the same operation, or GitHub
-        garbage-collects it and every consumer that pinned it breaks.
-        Read a conflicted fork PR as a moved tree rather than a real
-        conflict: merge the branch forward, then run the tests again,
-        because the tree under them changed. A PR against the branch
-        inherits the branch's state, so a red check can predate the
-        branch; a sibling PR against another base separates the two.
+        Fork repos keep one flat branch: `ix-patched` is a linear series of
+        ordinary git commits on the upstream base, one commit per patch, and
+        the flake input pins its tip. Use plain git. Do not reintroduce a jj
+        megamerge, a patch dependency graph, or an in-repo patch series.
+        Put each change in a commit of its own on top; there is no series to
+        absorb into and nothing to rewrite. Rebase onto the base when it
+        moves, which is the one operation the old patch graph existed to
+        optimise.
+        A force-push still needs a permanent `refs/pins/<date>-<sha12>` ref
+        for every rev a flake.lock has ever pinned, in the same operation, or
+        GitHub garbage-collects it and every consumer that pinned it breaks.
+        Read a conflicted fork PR as a moved base rather than a real
+        conflict: rebase, then run the tests again, because the tree under
+        them changed. A PR against the branch inherits the branch's state,
+        so a red check can predate the branch; a sibling PR against another
+        base separates the two.
         The branch is pushed directly, so make sure CI triggers on push to
         it and not only on pull requests, or nothing gates the thing every
         consumer builds from.
@@ -816,16 +551,6 @@
         replayed as independent cherry-picks, and the result confirmed by
         comparing tree object ids, not by reading a diff. The tree was
         byte-identical to the megamerge it replaced.
-        Amended 2026-07-31 from rebase-onto to merge-forward, at the
-        user's direction. The linear-series rule mandated rewriting a
-        branch flake.locks pin, and the pin-ref machinery, the
-        coordination around every force-push, and one retirement that
-        stranded index's pin on a deleted line all existed to compensate
-        for those rewrites. It also contradicted the derived-views
-        doctrine, which forbids rebasing published history. Merge-forward
-        keeps SHAs stable and deletes the compensation layer; the only
-        loss is a linear log, and the --first-parent --no-merges delta
-        answers the same question.
       '';
     };
   }
@@ -968,11 +693,11 @@
     subagentVerification = {
       topics = ["tooling" "verification"];
       text = ''
-        Verify a change against its requirement before calling it done,
-        and prefer one end-to-end check when the work is complete over
-        re-verifying every increment. Spawn a fresh-context subagent to
-        check only when you cannot name the failure mode you checked for;
-        otherwise verify inline and say what you ran.
+        Verification belongs in a context that did not do the work: spawn
+        a fresh subagent to check a change against its requirement when
+        the change spans more than one file, or when you cannot name the
+        failure mode you checked for. Otherwise verify inline and say what
+        you ran.
       '';
       reason = ''
         Requested 2026-07-28 (index#4338): the delegation rules covered
@@ -986,10 +711,7 @@
         which is the same judgment-call carve-out defineAcronyms rejects.
         Dropped a sentence telling the agent to race a fan-out against an
         inline attempt; experiments gates rollouts behind "only when
-        asked". Amended 2026-07-31: the multi-file trigger made
-        fresh-context review the common case; the user's direction is
-        working code fastest, with verification concentrated in one
-        end-to-end pass at the end.
+        asked".
       '';
     };
   }
@@ -1032,19 +754,9 @@
         claim landed only when the merge commit contains your push. Turn on
         auto-merge as soon as the PR is open and local checks pass (package
         tests, format, lint): `gh pr merge --auto --merge` hands the wait to
-        GitHub, so never sit watching a run. Arming defers a merge only
-        where something is there to hold it, so check that first, in the
-        repo you are about to arm: `gh api
-        repos/<owner>/<repo>/rules/branches/<base>` lists a
-        `required_status_checks` rule, and `autoMergeAllowed` is true. Read
-        `rules/branches/<base>` and never `rulesets`, because a ruleset
-        whose enforcement is disabled still lists every rule it declares;
-        that is ix right now, so ix has no gate. Where either check fails
-        there is nothing to wait for and `--auto` merges on the spot,
-        silently, exit 0. Then do not arm: say the repo has no gate and
-        leave the merge to a human. A red on main that your merge caused is
-        fixed forward immediately. Then delete worktree and branch and
-        announce in one line:
+        GitHub, so never sit watching a run. A red on main that your merge
+        caused is fixed forward immediately. Then delete worktree and branch
+        and announce in one line:
         `🚀 Pushed to main: [<summary>](<commit url>)` or
         `🌸 PR merged: [<title or number>](<url>) in <duration>`.
       '';
@@ -1063,46 +775,6 @@
         reaching for. Kept the claim-landed clause: `--auto` widens the
         window it was written for, since the merge now fires whenever CI
         finishes rather than when the agent asks.
-
-        The precondition was added 2026-08-01. "Required checks still decide
-        what lands, so arming only changes who waits" is true where required
-        checks exist, and the rule never said to confirm they do. On ix they
-        do not: `branches/main/protection` is 404 and `rules/branches/main`
-        is `[]`, so arming is merging, immediately and silently.
-
-        Two things came from the gap in one night. An agent armed a PR eight
-        seconds after opening it; it merged outright before any check
-        context registered, and the change broke main for everyone.
-        Separately, an agent built five PRs that turned out to revert 500
-        files of someone else's work, and they were closed safely for
-        exactly one reason: none had been armed. Had auto-merge been on, the
-        first green main would have merged a 500-file revert unattended.
-
-        The rule names `rules/branches/<base>` rather than `rulesets`
-        because ix has a ruleset named `main` that declares both
-        `pull_request` and `required_status_checks` and carries
-        `"enforcement": "disabled"`. Reading the declared rules says
-        protected; only the evaluated endpoint says otherwise, by returning
-        an empty list. A check whose passing state is an absence needs the
-        endpoint that honours enforcement.
-
-        `autoMergeAllowed` is in the same check because a repo with
-        auto-merge switched off is a third road to the same place: there
-        `gh pr merge --auto` also merges at once instead of arming. The two
-        conditions are uncorrelated, and the example that shows it is
-        upstream jj: the most gated repository measured here, carrying a
-        merge queue and required status checks, with `autoMergeAllowed`
-        false. An agent that confirmed only branch protection gets it wrong
-        exactly where the repository looks safest.
-
-        This is the control and not a note about one. Asked on 2026-08-01
-        whether to enable ix's ruleset instead, the user chose to leave it
-        disabled and keep the convention, so nothing mechanical stops an
-        unattended merge into an ungated repository. Every repository
-        measured that day was do-not-arm: ix, index, the nix fork, the jj
-        fork, the clippy fork and upstream jj. Weaken this rule and the
-        500-file revert that was closed safely, for the sole reason that
-        nobody had armed it, merges instead.
       '';
     };
   }
@@ -1115,10 +787,6 @@
         dependents, and a closed PR whose base is gone can be neither
         retargeted nor reopened. Recovery needs the deleted base sha
         re-pushed, so fetch `refs/pull/<n>/head` before touching a stack.
-        Rebasing onto a base that has landed assumes it landed as a merge:
-        confirm the base commit is an ancestor of the target first, because
-        against a squash the same command re-adds the base's whole diff on
-        top of itself.
       '';
       reason = ''
         Merging indexable-inc/nix#8 with `--delete-branch` silently closed #9,
@@ -1127,15 +795,6 @@
         `refs/pull/8/head` made it recoverable. The natural order, land the
         base then retarget what sat on top, is the order that breaks
         (ENG-11407).
-
-        The ancestor check was added 2026-08-02. "Rebase once your base
-        lands" is standard advice that silently assumes merge semantics. A
-        squashed base is a different commit carrying the same content, so
-        `git rebase origin/main` replays work whose changes are already
-        there, and the result is a pull request with the right title and a
-        diff that re-adds an entire crate. `git merge-base --is-ancestor
-        <base-tip> origin/main` answers it in one command, and was what made
-        a rebase onto a landed #9442 safe to do rather than hope about.
       '';
     };
   }
@@ -1184,24 +843,12 @@
       text = ''
         CI runs only on self-hosted fleet linux runners: no hosted runners,
         no mac in CI (darwin cross-compiles). A hosted or mac job you touch
-        is a defect to fix or file. A job claims exactly one dispatcher
-        label and nothing else: `runs-on: ["''${{ format('ix-ci-run-{0}-{1}-<suffix>',
-        github.run_id, github.run_attempt) }}"]`. A second label or none is
-        dropped silently, and a suffix ending `-ephemeral-vm` waits forever
-        on a lane that is off, with no runner and no timeout. Fleet runners
-        carry no `jq` and no `gh`; take them from `nix build
-        .#github-actions-shell-tools`.
+        is a defect to fix or file.
       '';
       reason = ''
         The darwin cache-push leg ran 2h+ on hosted macos-14 against 4 min
         self-hosted linux, on every deploy's critical path (2026-07-18;
-        ix#7609 direction). The label form and its two traps were added
-        2026-07-27 alongside ix#8876, the lint that enforces them: the
-        ephemeral-VM lane has never been admitted by
-        execution_environment_enabled and gave ix's deploy-test 101
-        dispatches and zero passes (ENG-10402, ENG-10508), and agents
-        converting a hosted job kept hitting a missing jq because the fleet
-        PATH is not the ubuntu-latest image's.
+        ix#7609 direction).
       '';
     };
   }
@@ -1211,26 +858,13 @@
       text = ''
         When verified facts suffice, act; offering to act is a failure. Pick
         a defensible default over a menu. Confirm only the destructive, the
-        hard to reverse, the outward-facing, and what only the user knows. On
-        the user's own machines and workloads, an operation with a working
-        rollback is not hard to reverse: run it, keep the rollback at hand,
-        and report. Handing back a command you could have run is offering to
-        act. At a blocker: report it with the approach you chose, take the
-        next viable path, and re-verify stale diagnoses before parking work.
-        An obstacle is often a property of the approach rather than of the
-        problem.
+        hard to reverse, the outward-facing, and what only the user knows. At
+        a blocker: name it, take the next viable path, and re-verify stale
+        diagnoses before parking work.
       '';
       reason = ''
         Follow-ups sat "waiting on the user" needing no permission; work sat
-        blocked on stale diagnoses. Absorbs blockedPath (index#3594). The
-        approach clause landed 2026-07-31: a report of blocked work listed
-        three obstacles, all of them properties of the retry loop the agent
-        had picked rather than of the race it was handling. Serialising with
-        a lock removed all three at once, and nothing in the report could
-        have shown that from outside. The rollback clause landed 2026-08-02
-        at the user's request: routine reversible work on the user's own
-        machines kept coming back as a command for the user to run, on the
-        reading that anything touching a live system is hard to reverse.
+        blocked on stale diagnoses. Absorbs blockedPath (index#3594).
       '';
     };
   }
@@ -1320,36 +954,80 @@
     };
   }
   {
-    statusPageOutput = {
+    generativeUiOutput = {
       topics = ["writing" "comms" "tooling"];
       text = ''
-        For status, plans, reports and explanations, the default response
-        surface is one succinct HTML page written under /tmp in a
-        directory named after the topic and opened with `html-open`
-        (plain `open` only if that is missing), plus one short chat line
-        carrying the verdict. Page shape, top to bottom: a one-line
-        title; a one-line subtitle naming the bottleneck; a table whose
-        rows are the items and whose columns are thing, cost, why, cost
-        stated early and concretely (hours, a merge button, after X); a
-        one-line list of what is already done; a closing note only if it
-        changes what the reader does. Verdict and cost before mechanism,
-        everywhere. Plain words a reader without the jargon can follow;
-        the evidence lives in the why column, not in appended prose. One
-        screen where the content allows. System font stack, one accent
-        color, auto light and dark from the system. A failed item is a
-        row stating the failure, not a missing row. As facts change,
-        update the same file in place rather than opening a second page.
+        Respond as generative UI, not chat text: for everything, by
+        default, one mkapp app per session is the response surface.
+        Scaffold with `mkapp`, serve with `Serve.app` in a kernel cell;
+        the page opens in the terminal split and hot-reloads on every
+        green promote, so never tell the user to refresh. Build the page
+        while working, not after: put what you are doing right now and
+        why in the store's status field, and give every in-progress step
+        its own section marked loading, so the page always shows the work
+        in flight as skeletons; when a step's result lands, replace its
+        skeleton in place. Skeleton anything started but unfinished,
+        including steps only planned; set done with a final status when
+        finished. UI principles: render the page's full structure
+        immediately and fill it progressively, never a blank page or a
+        big-bang reveal; verdict and results before mechanism, top to
+        bottom; layout stays stable while filling (replace in place,
+        append at the end, no reflow jumps); a failed step renders as a
+        failed section carrying its error output, not a silent gap;
+        motion only signals liveness (skeleton pulse), never decoration;
+        one accent color on the theme tokens, auto light and dark
+        following the system. Edit only the app's
+        `staging/` tree; the gate typechecks it and promotes green code
+        into the live page. Durable state belongs in the store so
+        promotes keep it; an already-open page keeps its state across
+        promotes, so live updates go as imperative statements after the
+        store's rehydrate, never as initialState edits. The user reads
+        only the page and nothing else, so write no chat text at all: no
+        summary, no pointer, no status line, no closing remark. The page is
+        the entire response. Everything goes on it, including results
+        arriving from background work, corrections to earlier claims, the
+        evidence behind a verdict, and the question you want answered next.
+        Anything that feels like it needs saying in chat is a section the
+        page is missing, so add the section. Saying a thing in both places
+        is the standing failure of this rule. Layer the
+        page: the surface is a short causal story in plain words (we
+        thought X, but Y, so Z) with named actors, ordered what broke /
+        damage / fix / lesson for incidents; a reader who knows none of
+        the jargon can follow it. Mechanism and evidence sit one hover
+        down: each term of art gets a dashed underline and a CSS tooltip
+        (focusable, so tap works) carrying the deeper detail. Teach the
+        idea before the failure: where a term of art is load-bearing, give
+        it an everyday analogy and its plain meaning first, so the failure
+        itself lands in one sentence that needs no further explaining. A
+        numbered chain carries a loop better than prose. Name the
+        diagnostics that could not have worked and why, including the ones
+        you proposed, and separate what the evidence proves from what it
+        only cleared. Expand dense notes, never paste them. When mkapp or the kernel is
+        unavailable, fall back to one live-rewritten HTML file opened
+        with `html-open` (plain `open` only if that too is missing), and
+        say so.
       '';
       reason = ''
-        Requested 2026-07-31: the user singled out a remaining-work page
-        in exactly this shape (title, bottleneck subtitle, thing/cost/why
-        table, done-line, one closing note) as the view to make the
-        default, cost first and succinct. Replaces the 2026-07-22
-        mkapp/Serve.app generative-UI mandate (index#4065): its
-        scaffold-and-promote machinery cost every session setup time
-        before the first fact landed, its removal was already in flight
-        (index#4381, index#4382), and the single-HTML-file surface it had
-        demoted to a fallback is what the user actually praised.
+        Requested 2026-07-22 (index#4065, extended same day): the user
+        wants every response
+        built as live generative UI, replacing the 2026-07-19
+        single-HTML-file default (kept as the fallback). Folds in the
+        former generatedAppUi rule (index#4015) so the response surface
+        and the mkapp/Serve.app machinery are stated once. Imperative
+        store updates: initialState edits never reach an open page, the
+        HMR handoff wins (seen live 2026-07-22). Skeleton-per-step and
+        the UI principles requested 2026-07-22 after the live demo:
+        status text alone hid what was in flight. Layering from
+        index#3872; html-open fallback from 2026-07-21. Teach-before-fail,
+        the numbered chain, and naming the dead diagnostics requested
+        2026-07-28: an explainer for a kernel RCU stall landed because it
+        built the idea from a library-and-book analogy before naming RCU,
+        so the failure was one sentence; because a five-step numbered
+        chain carried the retry loop that prose had muddled; and because
+        it said which diagnostics could not have worked and why, three of
+        which the asker had proposed. The evidence split was the same
+        page: a reboot cleared the stall and proved nothing about its
+        cause, since all five hosts ran that kernel and one wedged.
       '';
     };
   }
@@ -1600,18 +1278,14 @@
     reportToPlaybook = {
       topics = ["comms" "workflow"];
       text = ''
-        Substantial landed work can be published as a site update:
+        Publish substantial work as a site update:
         `packages/site/src/lib/updates/<slug>.svx`, frontmatter `id`,
         `postedAt`, `title`, `links`, `tags`; mdsvex, so fence `{` and
         `<...>`. It renders at `https://ix.dev/updates/<slug>`;
-        post that link to Slack `#general` with AI attribution. Publish
-        after the code lands, when the user asks or the work is
-        outward-facing; never let the write-up precede working code.
+        post that link to Slack `#general` with AI attribution.
       '';
       reason = ''
-        Amended 2026-07-31: demoted from a mandate to a post-landing
-        practice, since write-ups were competing for time with the code
-        they describe. Investigations evaporated with sessions; `playbook/src/routes/` does
+        Investigations evaporated with sessions; `playbook/src/routes/` does
         not render live (index#3458), so the path is exact.
       '';
     };

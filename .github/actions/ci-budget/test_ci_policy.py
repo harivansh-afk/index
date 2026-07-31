@@ -64,14 +64,8 @@ class PolicyTests(unittest.TestCase):
         # 1862s (see catalog/policy.json notes). One shared routine number cannot
         # be right for both, and the previous shared 300s was killing 54.5% of
         # the ix gates that went on to pass.
-        #
-        # ix's 7500s covers both gates at once: indexable-inc/ix#9288 folds
-        # index's `requiredGateRoots.x86_64-linux` into ix's `required-ci-checks`,
-        # so ix's worst case became 5012 + 1862 = 6874s and the 1.08x factor that
-        # produced the old 5400 gives 7424, rounded up. index's own 2400s is
-        # untouched: its gate does exactly what it did before.
-        assert validation_seconds("indexable-inc/ix", big_change=False) == 7_500
-        assert worker_timeout_minutes("indexable-inc/ix", big_change=False) == 128
+        assert validation_seconds("indexable-inc/ix", big_change=False) == 5_400
+        assert worker_timeout_minutes("indexable-inc/ix", big_change=False) == 93
         assert validation_seconds("indexable-inc/index", big_change=False) == 2_400
         assert worker_timeout_minutes("indexable-inc/index", big_change=False) == 43
 
@@ -229,8 +223,8 @@ class PolicyTests(unittest.TestCase):
         )
 
         assert not decision.classification.big_change
-        assert decision.validation_seconds == 7_500
-        assert decision.worker_timeout_minutes == 128
+        assert decision.validation_seconds == 5_400
+        assert decision.worker_timeout_minutes == 93
 
     def test_policy_rejects_unknown_keys(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

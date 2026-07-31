@@ -175,44 +175,6 @@ class GitHubClientTests(unittest.TestCase):
         assert result.reason["sources"] == ["label"]
         assert not transport.requests
 
-    def test_unlabelled_pull_request_over_the_api_cap_classifies_big(self) -> None:
-        """A pull request GitHub will not enumerate is definitionally a big change.
-
-        This used to raise out of `changed_paths`, which failed the classifier
-        outright: every job needing its outputs skipped and the required
-        contexts went red describing a missing phase rather than the change.
-        ix#9290 hit it with 4541 changed files from a repository merge.
-        """
-        transport = FakeTransport([])
-        client = ci_budget.GitHubClient("indexable-inc/index", "token", transport)
-
-        result = ci_budget.classify_pull_request(
-            client,
-            {"number": 9290, "labels": [], "changed_files": 4541},
-            "indexable-inc/index",
-            force_big_change=False,
-        )
-
-        assert result.big_change
-        assert result.reason["sources"] == ["unenumerable"]
-        assert result.reason["unenumerable"] == [[9290, 4541]]
-        # The point is not to page through 3000 files and give up; it is not to ask.
-        assert not transport.requests
-
-    def test_unenumerable_comment_says_why_it_classified_big(self) -> None:
-        classification = ci_budget.classify(
-            [],
-            [],
-            "indexable-inc/index",
-            force_big_change=False,
-            unenumerable=[(9290, 4541)],
-        )
-
-        comment = ci_budget.render_comment(classification, "indexable-inc/index")
-
-        assert "#9290 has 4541 changed files" in comment
-        assert "at most 3000" in comment
-
     def test_snapshot_artifact_carries_routine_decision(self) -> None:
         transport = FakeTransport(
             [
@@ -711,7 +673,7 @@ class RenderingTests(unittest.TestCase):
         # The sticky comment quotes the repository's own measured routine tier,
         # not the catalog default: a comment that names someone else's budget is
         # how an operator learns the wrong number for their own PR.
-        assert "7500 seconds for validation" in comment
+        assert "5400 seconds for validation" in comment
         assert "10 seconds for cleanup" in comment
         assert "Routine validation applies" in comment
         # ENG-10273: the label alone does nothing to an attempt whose budget is

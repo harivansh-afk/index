@@ -9,7 +9,6 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "schemas.ts",
     "native"
   ],
   "engines": {

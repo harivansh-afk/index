@@ -8,6 +8,7 @@ defmodule IxMcp.Application do
       ├── IxMcp.Checkpoint      ETS keeper for workspace state (survives Workspace restarts)
       ├── IxMcp.Workspace       the shared binding + Macro.Env every cell sees
       ├── IxMcp.Jobs.Registry   id -> job process
+      ├── IxMcp.Serve.State     served-app bookkeeping (url, jobs, gate outcome)
       ├── IxMcp.MCP.Notifier    server-initiated notification fan-out (+ outbox replay)
       ├── IxMcp.MCP.ClientRequests  server-initiated requests (elicitation) awaiting client replies
       ├── IxMcp.Dashboard.Bridge  dashboard watch streams -> per-viewer outbox notifications
@@ -48,6 +49,9 @@ defmodule IxMcp.Application do
         IxMcp.Checkpoint,
         IxMcp.Workspace,
         {Registry, keys: :unique, name: IxMcp.Jobs.Registry},
+        # Serve bookkeeping outlives the jobs it describes (gate results are
+        # read after a serve's jobs die), so it lives here, not in a job.
+        IxMcp.Serve.State,
         # Notifier and Reaper before the job supervisor: a job registers with
         # the reaper and publishes through the notifier, so both must be up
         # before any job can start (#3839).
@@ -67,8 +71,7 @@ defmodule IxMcp.Application do
         {Task.Supervisor, name: IxMcp.PrWatch.Supervisor},
         # The depth-1 subagent surface (index#3700): harness first, then the
         # ledger that drains its lead mailbox.
-        {IxMcp.Agents.ForkGuard, enabled: loom?()},
-        {AgentHarness, name: IxMcp.Agents.Harness, runner: agent_runner()},
+        {AgentHarness, name: IxMcp.Agents.Harness, runner: IxMcp.Agents.CliRunner},
         {IxMcp.Agents.Events, harness: IxMcp.Agents.Harness}
       ] ++ issue_watch() ++ transport()
 
@@ -85,12 +88,6 @@ defmodule IxMcp.Application do
       max_restarts: 10,
       name: IxMcp.Supervisor
     )
-  end
-
-  defp loom?, do: is_binary(System.get_env("LOOM_PARENT_VM"))
-
-  defp agent_runner do
-    if loom?(), do: IxMcp.Agents.LoomRunner, else: IxMcp.Agents.CliRunner
   end
 
   # index#3539: without ERL_CRASH_DUMP the BEAM writes erl_crash.dump into

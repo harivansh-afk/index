@@ -6,26 +6,6 @@
 
 const native = require("./native/sample_ts.node");
 
-// `undefined` and `null` both mean "unset", as the declarations promise.
-// The native layer reads absence only from `undefined`, so `null` is
-// normalized away here for every argument at once.
-function normalizeArg(value) {
-  if (value === null) return undefined;
-  if (Array.isArray(value)) return value.map(normalizeArg);
-  if (
-    typeof value === "object" &&
-    Object.getPrototypeOf(value) === Object.prototype
-  ) {
-    const out = {};
-    for (const [key, entry] of Object.entries(value)) {
-      const normalized = normalizeArg(entry);
-      if (normalized !== undefined) out[key] = normalized;
-    }
-    return out;
-  }
-  return value;
-}
-
 /** Boundary failures. */
 class SampleError extends Error {
   constructor(message, code) {
@@ -142,7 +122,7 @@ class Counter {
       return;
     }
     try {
-      this.#handle = new native.Counter(...args.map(normalizeArg));
+      this.#handle = new native.Counter(...args);
     } catch (error) {
       throw decodeError(error);
     }
@@ -151,7 +131,7 @@ class Counter {
   /** Current value. */
   value(...args) {
     try {
-      return this.#handle.value(...args.map(normalizeArg));
+      return this.#handle.value(...args);
     } catch (error) {
       throw decodeError(error);
     }
@@ -160,34 +140,7 @@ class Counter {
   /** Add and return the new value. */
   async addSlowly(...args) {
     try {
-      return await this.#handle.addSlowly(...args.map(normalizeArg));
-    } catch (error) {
-      throw decodeError(error);
-    }
-  }
-
-  /** Every value the counter takes. */
-  watch(...args) {
-    try {
-      return wrapStream(this.#handle.watch(...args.map(normalizeArg)));
-    } catch (error) {
-      throw decodeError(error);
-    }
-  }
-
-  /** Labels under `prefix` (async, throwing, renamed). */
-  async tailRows(...args) {
-    try {
-      return wrapStream(await this.#handle.tailRows(...args.map(normalizeArg)));
-    } catch (error) {
-      throw decodeError(error);
-    }
-  }
-
-  /** Fork a counter. */
-  fork(...args) {
-    try {
-      return new Counter(nativeHandle, this.#handle.fork(...args.map(normalizeArg)));
+      return await this.#handle.addSlowly(...args);
     } catch (error) {
       throw decodeError(error);
     }
@@ -196,7 +149,7 @@ class Counter {
   /** Release the counter. */
   async close(...args) {
     try {
-      return await this.#handle.close(...args.map(normalizeArg));
+      return await this.#handle.close(...args);
     } catch (error) {
       throw decodeError(error);
     }
@@ -215,7 +168,7 @@ class Counter {
  */
 function rows(...args) {
   try {
-    return native.rows(...args.map(normalizeArg));
+    return native.rows(...args);
   } catch (error) {
     throw decodeError(error);
   }
@@ -223,7 +176,7 @@ function rows(...args) {
 
 function touchPath(...args) {
   try {
-    return native.touchPath(...args.map(normalizeArg));
+    return native.touchPath(...args);
   } catch (error) {
     throw decodeError(error);
   }
@@ -232,7 +185,7 @@ function touchPath(...args) {
 /** Add, slowly. */
 async function slowAdd(...args) {
   try {
-    return await native.slowAdd(...args.map(normalizeArg));
+    return await native.slowAdd(...args);
   } catch (error) {
     throw decodeError(error);
   }
@@ -241,7 +194,7 @@ async function slowAdd(...args) {
 /** Fetch one row. */
 async function fetch(...args) {
   try {
-    return await native.fetch(...args.map(normalizeArg));
+    return await native.fetch(...args);
   } catch (error) {
     throw decodeError(error);
   }
@@ -250,7 +203,7 @@ async function fetch(...args) {
 /** Tail rows as a pull stream. */
 function tail(...args) {
   try {
-    return wrapStream(native.tail(...args.map(normalizeArg)));
+    return wrapStream(native.tail(...args));
   } catch (error) {
     throw decodeError(error);
   }
@@ -259,7 +212,7 @@ function tail(...args) {
 /** Tail rows once the store opens. */
 async function tailLater(...args) {
   try {
-    return wrapStream(await native.tailLater(...args.map(normalizeArg)));
+    return wrapStream(await native.tailLater(...args));
   } catch (error) {
     throw decodeError(error);
   }
@@ -268,7 +221,7 @@ async function tailLater(...args) {
 /** Open a counter from a free function. */
 function openCounter(...args) {
   try {
-    return new Counter(nativeHandle, native.openCounter(...args.map(normalizeArg)));
+    return new Counter(nativeHandle, native.openCounter(...args));
   } catch (error) {
     throw decodeError(error);
   }
@@ -287,4 +240,3 @@ module.exports.SampleError = SampleError;
 module.exports.StoreGoneError = StoreGoneError;
 module.exports.Invalid = Invalid;
 module.exports.Counter = Counter;
-

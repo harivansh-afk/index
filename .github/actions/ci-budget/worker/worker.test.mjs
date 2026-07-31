@@ -419,7 +419,7 @@ test("validation starts with the complete tier allowance after setup", () => {
       policy,
       repository: "indexable-inc/ix",
     }),
-    7_500,
+    5_400,
   );
   assert.equal(
     validationSeconds({
