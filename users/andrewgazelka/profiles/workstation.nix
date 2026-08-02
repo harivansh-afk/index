@@ -594,7 +594,12 @@ in {
       libgit2 # C library implementing git core methods (linked against by other tools)
       gh # GitHub CLI (PRs, issues, gists, auth, runs)
       tea # Forgejo/Gitea CLI (pull requests, issues, releases)
-      jujutsu # `jj` — Git-compatible VCS with first-class branches/operations
+      # `jj` from the indexable-inc/jj fork rather than nixpkgs' jujutsu: the
+      # fork carries `jj views fetch` and `jj views push`, which drive the
+      # derived subtrees this config depends on (ix/ is one). nixpkgs' build
+      # has no `views` subcommand at all, so the pin in flake.nix reaches
+      # nothing unless this line names the fork package.
+      indexPkgs.jj # `jj` — Git-compatible VCS with first-class branches/operations
       # jj-starship  # slow to build from source (jj-lib); indexPkgs.vcs-prompt renders the same segment
       lazygit # TUI for git (stage, commit, branch, rebase visually)
       delta # syntax-highlighted git diff/blame pager
