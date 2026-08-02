@@ -17,6 +17,8 @@ seconds rather than hours. It prints the critical path, the width per level, and
 a ranking of nodes whose dependents reach them only through an environment
 variable naming the store path.
 
+In **index**:
+
 ```
 nix-dag .#whence
   929 derivations, 5466 edges
@@ -82,9 +84,10 @@ up. Filed as ix#9086.
 ## Evaluate before you build
 
 An attribute costs minutes; its closure costs hours. `nix eval --raw
-.#x.drvPath` proves the expression is sound without building anything.
+.#<attr>.drvPath` proves the expression is sound without building anything.
 
-Across a fleet, one eval finds every host's eval errors at once:
+In **both repos**, one eval finds every host's eval errors at once, across a
+whole fleet:
 
 ```sh
 nix eval --json .#nixosConfigurations \
@@ -133,7 +136,9 @@ the binary, so `whence` on `hil-compute-2` is a command-not-found and the
 question there needs the eval-time route instead.
 
 That route is `options.<name>.definitionsWithLocations`, which names every file
-that set an option:
+that set an option.
+
+In **both repos**:
 
 ```sh
 nix eval --json .#nixosConfigurations --apply \

@@ -166,6 +166,22 @@
     # autoMemoryDirectory would silently revert to the per-project
     # ~/.claude/projects/<slug>/memory default instead of disabling.
     env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
+    # Let a subagent delegate. Claude Code allows one layer of subagents below
+    # the main conversation by default, so every delegated task is a leaf: an
+    # agent that needs to fan out has to inline the work instead, and the Agent
+    # tool refuses with "Subagent nesting limit reached (depth 1 of 1)". Two is
+    # the smallest value that makes delegation compose.
+    #
+    # Rides `extraSettings` here rather than
+    # `programs.claude-code.defaults.env`, for the same reason omitRules does
+    # below: the module folds `defaults` only into basePackage.override, and
+    # `package = claudeCode` discards the defaulted package, so a value set
+    # there evaluates fine and never reaches the render (index#3537).
+    #
+    # A string, not an int: the var is validated as digits-only and anything
+    # that does not parse is ignored, so a wrong type reads as no change at all
+    # rather than as an error.
+    env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH = "2";
     enabledPlugins = {
       "ix-docs@ix" = true;
       "ix@ix" = true;
@@ -600,6 +616,11 @@ in {
       # has no `views` subcommand at all, so the pin in flake.nix reaches
       # nothing unless this line names the fork package.
       indexPkgs.jj # `jj` — Git-compatible VCS with first-class branches/operations
+      # The standalone view tool, packaged apart from `jj` because it is not part
+      # of the VCS anyone installs. `jj views fetch` does the import internally in
+      # the normal case, so this is only reached when a view has diverged and has
+      # to be integrated by hand -- which is exactly when being without it hurts.
+      indexPkgs.jj-views
       # jj-starship  # slow to build from source (jj-lib); indexPkgs.vcs-prompt renders the same segment
       lazygit # TUI for git (stage, commit, branch, rebase visually)
       delta # syntax-highlighted git diff/blame pager

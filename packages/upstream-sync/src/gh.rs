@@ -339,7 +339,11 @@ pub enum Read {
     Absent(Absent),
 }
 
-/// A `gh api` read for the drift report.
+/// A `gh api` read for the read-only reports (`drift`, `pin-drift`).
+///
+/// The lane travels in `ctx` rather than being hardcoded here: two reports
+/// share this function, and a message naming the wrong one sends whoever is
+/// reading it to the wrong place.
 ///
 /// 404 and 422 are answers, not failures: the forge is up and is telling us
 /// something durable about our own pin (a rev the upstream repo has never
@@ -355,10 +359,16 @@ pub enum Read {
 /// against the same API this probe uses, so an expired token is a live
 /// possibility, not a hypothetical.
 ///
+/// `absent_hint` is what a 404 or 422 MEANS for the caller's probe, printed as
+/// the warning's second half. It is a parameter because the two lanes read
+/// different repos: drift probes the UPSTREAM, where a megamerge sha legitimately
+/// resolves to nothing, while pin-drift probes our own fork repo, where the same
+/// status means something is missing that should be there.
+///
 /// # Errors
 /// Fails when `gh` cannot be spawned, and when the forge could not be
 /// reached or refused the read.
-pub fn read(ctx: &str, path: &str, jq: &str) -> Result<Read> {
+pub fn read(ctx: &str, path: &str, jq: &str, absent_hint: &str) -> Result<Read> {
     let res = cmd::complete("gh", &["api", path, "--jq", jq])?;
     if res.ok() {
         return Ok(Read::Value(res.stdout.trim().to_owned()));
@@ -367,7 +377,7 @@ pub fn read(ctx: &str, path: &str, jq: &str) -> Result<Read> {
     let status = http_status(&detail);
     if !matches!(status, Some(404 | 422)) {
         return Err(eyre!(
-            "upstream-sync: drift: {ctx}: cannot reach the forge for `gh api {path}`: {}. \
+            "upstream-sync: {ctx}: cannot reach the forge for `gh api {path}`: {}. \
              This is fatal rather than an unknown cell: a drift table computed without the \
              forge reads as \"no drift\", not as \"unknown\". Check GH_TOKEN and the forge's \
              status, then re-run.",
@@ -388,10 +398,7 @@ pub fn read(ctx: &str, path: &str, jq: &str) -> Result<Read> {
         paint(
             YELLOW,
             &format!(
-                "upstream-sync: drift: {ctx}: `gh api {path}` answered HTTP {}: {}. The pinned \
-                 rev is not present upstream -- either the fork repo is not a GitHub fork of the \
-                 upstream (they share no object store, so a megamerge sha can never resolve \
-                 there) or the rev was garbage-collected. Cell left unknown.",
+                "upstream-sync: {ctx}: `gh api {path}` answered HTTP {}: {}. {absent_hint}",
                 absent.status, absent.detail
             )
         )

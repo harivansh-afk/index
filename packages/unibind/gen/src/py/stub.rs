@@ -8,8 +8,9 @@
 
 use std::fmt::Write as _;
 
-use unibind_backend_py::stream::{self as streams, StreamExport};
+use unibind_backend_py::stream as streams;
 use unibind_core::ir;
+use unibind_core::render::{StreamExport, stream_exports};
 
 use crate::py::types::{self, Position};
 
@@ -22,6 +23,10 @@ pub fn render(interface: &ir::Interface) -> String {
     if needs_os_import(interface) {
         blocks.push("import os".to_owned());
     }
+    // Records declare `__iter__` as `collections.abc.Iterator[str]`.
+    if !interface.records.is_empty() {
+        blocks.push("import collections.abc".to_owned());
+    }
     for error in &interface.errors {
         error_classes(error, &mut blocks);
     }
@@ -33,7 +38,7 @@ pub fn render(interface: &ir::Interface) -> String {
     }
     // Forward references need no quoting in a stub, so stream classes can
     // trail the objects whose methods return them.
-    for export in streams::collect(interface) {
+    for export in stream_exports(interface) {
         blocks.push(stream_class(interface, &export));
     }
     for function in &interface.functions {
@@ -137,8 +142,8 @@ fn class_with_members(header: &str, docs: &[String], members: &[String]) -> Stri
     out
 }
 
-/// A record: docstring, the positional `__init__` the generated `#[new]`
-/// exposes, then one read-only property per field.
+/// A record: docstring, the generated `#[new]`, then one read-only property per
+/// field. All-optional records are option bags and therefore keyword-only.
 fn record_class(interface: &ir::Interface, record: &ir::Record) -> String {
     let name = types::py_name(&record.names, &record.name);
     let mut members = Vec::new();
@@ -146,13 +151,31 @@ fn record_class(interface: &ir::Interface, record: &ir::Record) -> String {
     let params: Vec<String> = record
         .fields
         .iter()
-        .map(|field| {
+        .enumerate()
+        .map(|(index, field)| {
             let py = types::py_name(&field.names, &field.name);
             let ty = types::annotation(interface, &field.ty, Position::Argument);
-            format!("{py}: {ty}")
+            if matches!(field.ty, ir::Type::Option(_))
+                && record.fields[index..]
+                    .iter()
+                    .all(|field| matches!(field.ty, ir::Type::Option(_)))
+            {
+                format!("{py}: {ty} = None")
+            } else {
+                format!("{py}: {ty}")
+            }
         })
         .collect();
-    let mut init_params = String::from("self");
+    let keyword_only = !record.fields.is_empty()
+        && record
+            .fields
+            .iter()
+            .all(|field| matches!(field.ty, ir::Type::Option(_)));
+    let mut init_params = if keyword_only {
+        String::from("self, *")
+    } else {
+        String::from("self")
+    };
     for param in &params {
         init_params.push_str(", ");
         init_params.push_str(param);
@@ -169,6 +192,32 @@ fn record_class(interface: &ir::Interface, record: &ir::Record) -> String {
             members.push(format!("{header}\n{}", docstring(&field.docs, 2)));
         }
     }
+
+    // Every record carries the notebook affordances the backend renders: a
+    // field-by-field `__repr__` (declared by `object`, so not stubbed), a
+    // shallow `to_dict`, and the read-only mapping protocol -- so
+    // `dict(record)`, `{**record}`, and `pandas.DataFrame(records)` all
+    // work. Stubbed so type checkers see them.
+    let to_dict_docs = vec![
+        "Shallow dict of this record's fields, keyed by their Python".to_owned(),
+        "names. Nested records stay objects; call `to_dict` on them to".to_owned(),
+        "go deeper.".to_owned(),
+    ];
+    members.push(format!(
+        "    def to_dict(self) -> dict[str, object]:\n{}",
+        docstring(&to_dict_docs, 2)
+    ));
+    members.push(
+        "    def keys(self) -> list[str]: ...\n\
+         \n    def values(self) -> list[object]: ...\n\
+         \n    def items(self) -> list[tuple[str, object]]: ...\n\
+         \n    def get(self, key: str, default: object | None = None) -> object | None: ...\n\
+         \n    def __getitem__(self, key: str) -> object: ...\n\
+         \n    def __contains__(self, key: str) -> bool: ...\n\
+         \n    def __len__(self) -> int: ...\n\
+         \n    def __iter__(self) -> collections.abc.Iterator[str]: ..."
+            .to_owned(),
+    );
 
     class_with_members(&format!("class {name}:"), &record.docs, &members)
 }
@@ -264,12 +313,8 @@ fn constructor_def(interface: &ir::Interface, ctor: &ir::Function) -> String {
 /// `__anext__` resolves one item) and their synthesized docstrings.
 fn stream_class(interface: &ir::Interface, export: &StreamExport<'_>) -> String {
     let class = streams::class_name(export.owner, &export.function.name);
-    let produced = export.owner.map_or_else(
-        || export.function.name.clone(),
-        |object| format!("{object}.{}", export.function.name),
-    );
     let docs = vec![
-        format!("Async iterator produced by `{produced}`."),
+        format!("Async iterator produced by `{}`.", export.qualified_name()),
         String::new(),
         "Pull-based: each `__anext__` polls exactly one item, so the producer only runs as \
          fast as the consumer awaits."

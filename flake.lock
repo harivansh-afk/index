@@ -140,17 +140,17 @@
     "git-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1784960835,
+        "lastModified": 1785531994,
         "narHash": "sha256-9N1VyEYI7gpdR75evmQiO5fg546e4tc3W4zuwRFKbU0=",
         "owner": "indexable-inc",
         "repo": "git",
-        "rev": "69fbc5cfd883f5a45c88f202325ba08d20fdbdcb",
+        "rev": "eef38393cda1413ded72f0259d1618110cf38456",
         "type": "github"
       },
       "original": {
         "owner": "indexable-inc",
         "repo": "git",
-        "rev": "69fbc5cfd883f5a45c88f202325ba08d20fdbdcb",
+        "rev": "eef38393cda1413ded72f0259d1618110cf38456",
         "type": "github"
       }
     },
@@ -203,17 +203,17 @@
     "home-manager-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1784724659,
-        "narHash": "sha256-eCwzFQYWJ5vW3nODZHPiaTuiRq9Z00S6jE5tfPtZe3s=",
+        "lastModified": 1785530609,
+        "narHash": "sha256-85GQQa8fT6mMGISL22IaZ99uDSHtRefSiy/Fae5rv90=",
         "owner": "indexable-inc",
         "repo": "home-manager",
-        "rev": "d27be2a29e5feb86a9196838b1bb0fdc44119cb8",
+        "rev": "7d29fa5cbf4b468b7d9692cfb500cb89291fb519",
         "type": "github"
       },
       "original": {
         "owner": "indexable-inc",
         "repo": "home-manager",
-        "rev": "d27be2a29e5feb86a9196838b1bb0fdc44119cb8",
+        "rev": "7d29fa5cbf4b468b7d9692cfb500cb89291fb519",
         "type": "github"
       }
     },
@@ -265,23 +265,6 @@
         "owner": "indexable-inc",
         "repo": "mesa",
         "rev": "0859cf8912b7dde1cb7b06f2ed416a84a479feef",
-        "type": "github"
-      }
-    },
-    "nix-derivation-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1784724798,
-        "narHash": "sha256-2iW2bmKUlHZ+uVhb5JjZdIfICxMjSjCsdDzHKw/HFPA=",
-        "owner": "indexable-inc",
-        "repo": "Haskell-Nix-Derivation-Library",
-        "rev": "ba78008319f3517013a9fd70245ecee5ab2054b4",
-        "type": "github"
-      },
-      "original": {
-        "owner": "indexable-inc",
-        "repo": "Haskell-Nix-Derivation-Library",
-        "rev": "ba78008319f3517013a9fd70245ecee5ab2054b4",
         "type": "github"
       }
     },
@@ -579,7 +562,6 @@
         "jj-src": "jj-src",
         "launchk-src": "launchk-src",
         "mesa-src": "mesa-src",
-        "nix-derivation-src": "nix-derivation-src",
         "nix-fast-build-src": "nix-fast-build-src",
         "nix-ninja-src": "nix-ninja-src",
         "nix-src": "nix-src",

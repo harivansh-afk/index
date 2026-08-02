@@ -9,6 +9,7 @@ use std::fmt::Write as _;
 
 use unibind_backend_py::stream as streams;
 use unibind_core::ir;
+use unibind_core::render::stream_exports;
 
 use crate::py::stub;
 use crate::py::types;
@@ -33,6 +34,25 @@ pub fn render(interface: &ir::Interface, module_name: &str) -> String {
         writeln!(out, "    \"{name}\",").expect("write to string");
     }
     out.push_str("]\n");
+
+    // Records implement the full read-only mapping protocol (keys, values,
+    // items, get, and the dunders), so registering them makes
+    // `isinstance(record, Mapping)` true -- which is what lets consumers
+    // that type-sniff, pandas' DataFrame constructor among them, treat a
+    // list of records as a list of dicts.
+    let mut records: Vec<String> = interface
+        .records
+        .iter()
+        .map(|record| types::py_name(&record.names, &record.name).to_owned())
+        .collect();
+    records.sort();
+    if !records.is_empty() {
+        out.push_str("\nimport collections.abc as _collections_abc\n\nfor _record in (\n");
+        for record in &records {
+            writeln!(out, "    {record},").expect("write to string");
+        }
+        out.push_str("):\n    _collections_abc.Mapping.register(_record)\ndel _collections_abc, _record\n");
+    }
     out
 }
 
@@ -50,7 +70,7 @@ fn public_names(interface: &ir::Interface) -> Vec<String> {
     for object in &interface.objects {
         names.push(types::py_name(&object.names, &object.name).to_owned());
     }
-    for export in streams::collect(interface) {
+    for export in stream_exports(interface) {
         names.push(streams::class_name(export.owner, &export.function.name));
     }
     for error in &interface.errors {

@@ -69,7 +69,7 @@ def maybe-unix-time [field: string] {
         return $value
     }
 
-    let lower = ($field | str downcase)
+    let lower = ($field | str lowercase)
     let text = ($value | into string)
 
     if (not ($lower | str contains "time")) or (not ($text =~ '^-?\d+$')) {
@@ -753,6 +753,20 @@ $env.config = {
         ]
         # Ring bell when command finishes - shows ! in tmux for other windows
         pre_prompt: [{||
+            # A closed Ghostty surface sometimes fails to take its shell down:
+            # the REPL is reparented to launchd (ppid 1) and keeps firing these
+            # hooks against the dead pty at ~15% CPU, accumulating one orphan
+            # every few hours (andrewgazelka/nix#116). A tab shell never has
+            # ppid 1 while its surface is alive, so exit on the first hook run
+            # after orphaning. pre_prompt only fires in the REPL, so `nu -c`
+            # background scripts are unaffected; the env gate keeps the guard
+            # scoped to ghostty-launched sessions. SIGTERM rather than `exit`:
+            # nushell swallows exit requests raised inside hooks, so an orphaned
+            # REPL survives `exit 1` here (verified on 0.114.0) while a signal
+            # actually takes it down.
+            if ($env.GHOSTTY_RESOURCES_DIR? | is-not-empty) and ((ps | where pid == $nu.pid | get -o ppid.0 | default 0) == 1) {
+                ^/bin/kill $nu.pid
+            }
             github-pr-prompt-refresh-current-if-stale
             if "TMUX" in $env { print -n (char bel) }
         }]
@@ -1431,10 +1445,10 @@ def "nu-complete c" [context: string] {
     }
 
     # cwd's own dirs, substring-filtered by the token ourselves (filter is off).
-    let lc = ($token | str downcase)
+    let lc = ($token | str lowercase)
     let local = (
         ls --short-names | where type == dir
-        | where {|row| ($lc | is-empty) or ($row.name | str downcase | str contains $lc) }
+        | where {|row| ($lc | is-empty) or ($row.name | str lowercase | str contains $lc) }
         | each {|row| { value: ($row.name + '/'), description: dir } }
     )
     let local_names = ($local | get value)

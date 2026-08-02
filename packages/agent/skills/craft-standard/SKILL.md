@@ -27,3 +27,13 @@ a choice, name the recommended default.
 
 A fix lands code plus the nearest durable test; diagnosis alone is unfinished.
 Tests defend behavior that crosses a boundary, not implementation trivia.
+
+Confirming an explanation's premises is not testing the explanation. A causal
+claim -- this ordering is what keeps it safe, this index is what makes it fast --
+is tested only by breaking the cause and watching the effect disappear. Checking
+that the premises hold is the agreeable form of review, and it passes claims that
+are true in every part and wrong as a whole. It is most tempting exactly when the
+premises are cheap to verify and the conclusion sounds right. Where the claim is
+load-bearing, pin it with a test named for the property rather than for the
+mechanism, because the next refactor will preserve the mechanism it can see and
+break the property nobody wrote down.

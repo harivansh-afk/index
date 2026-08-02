@@ -103,7 +103,7 @@ words because they answer different questions: `never` is our judgement that the
 patch does not belong upstream, `rejected` is the upstream's judgement, already
 delivered.
 
-The mechanism is:
+In **both repos**, the mechanism is:
 
 ```sh
 nix run .#upstream-pr -- <pkg> <patch> --open

@@ -117,14 +117,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # jj megamerge fork of nix-community/home-manager carrying the batched
-    # activation linking series (lib/fork-packages.nix). Distinct from the
-    # `home-manager` flake input above: this pins the `ix-patched` megamerge
-    # commit that workstation configs also consume. Pinned BY REV (autoUpdate
-    # = false): bump = jj rebase in indexable-inc/home-manager, push bookmark
-    # + pin ref, repin here.
+    # Fork of nix-community/home-manager carrying the batched activation
+    # linking series (lib/fork-packages.nix). Distinct from the
+    # `home-manager` flake input above: this pins the `ix-patched` tip that
+    # workstation configs also consume. Pinned BY REV (autoUpdate = false):
+    # bump = merge upstream into `ix-patched` in indexable-inc/home-manager,
+    # fast-forward the branch, repin here.
     home-manager-src = {
-      url = "github:indexable-inc/home-manager/d27be2a29e5feb86a9196838b1bb0fdc44119cb8";
+      url = "github:indexable-inc/home-manager/7d29fa5cbf4b468b7d9692cfb500cb89291fb519";
       flake = false;
     };
 
@@ -153,23 +153,29 @@
     # submodule object store instead of re-cloning every submodule from the
     # network (#3610). The base tracks nixpkgs' git version (v2.55.0 tag)
     # because the package overlays nixpkgs' git recipe, so it never
-    # free-floats: on a nixpkgs git bump, jj-rebase indexable-inc/git onto
-    # the matching tag and repin. Each rebase lands on a new branch
-    # (ix-patched-v<version>) rather than rewriting the previous one, so revs
-    # pinned by older index commits stay reachable and keep building.
+    # free-floats: on a nixpkgs git bump, rebase the series onto the matching
+    # tag, MERGE the result into ix-patched and repin. The merge is what keeps
+    # revs pinned by older index commits reachable, so a per-release branch
+    # (ix-patched-v<version>) is no longer minted; the one left behind,
+    # ix-patched-v2.55.0, is now an ancestor of the bookmark.
     git-src = {
-      url = "github:indexable-inc/git/69fbc5cfd883f5a45c88f202325ba08d20fdbdcb";
+      url = "github:indexable-inc/git/eef38393cda1413ded72f0259d1618110cf38456";
       flake = false;
     };
 
     # jj megamerge fork of jj-vcs/jj. Pinned BY REV, never branch-loose: the
-    # series is large and touches working-copy internals, so a rebase onto
-    # upstream main conflicts easily, and a conflicted jj commit must never
-    # reach the bookmark (git-based readers cannot parse jj's conflict
-    # encoding). The rev therefore moves only under a deliberate rebase a
-    # human resolves, never under the scheduled fork-sync (autoUpdate = false
-    # in lib/fork-packages.nix). Bump it by hand: jj-rebase indexable-inc/jj,
-    # push bookmark + pin ref, repin here, then build `.#jj`.
+    # series is large and touches working-copy internals, and a conflicted jj
+    # commit must never reach the bookmark (git-based readers cannot parse
+    # jj's conflict encoding). The rev therefore moves only when a human
+    # deliberately repins, never under the scheduled fork-sync
+    # (autoUpdate = false in lib/fork-packages.nix).
+    #
+    # `ix-patched` is published history that flake.locks pin, so it is never
+    # rebased: work lands as ordinary commits on top, and upstream arrives as a
+    # two-parent merge. Bump it by hand: push the commits, wait for that
+    # branch's own push-triggered CI to go green (f561bc016 is what makes a
+    # pushed tip get its own verdict), mint the pin ref, repin here, then build
+    # `.#jj`.
     jj-src = {
       url = "github:indexable-inc/jj/5cf8a2fc6c593142e805e415cded2ecb1f401486";
       flake = false;
@@ -200,50 +206,46 @@
       # same 2c6d06e9387c base, still version 2.34.7, so the drop-in property
       # the block above is about does not move). Previous pin survives as
       # refs/pins/2026-07-31-2d7585afe7b1, this one as
-      # refs/pins/2026-08-02-1c1dba1da9dd.
+      # refs/pins/2026-08-01-1c1dba1da9dd.
       #
-      # The point of this bump is the jj fetcher. It used to spawn one
-      # `jj file show` per file in the tree; it now reads the snapshot jj has
-      # already taken, and for a pinned revision reads jj's Git backing store
-      # directly instead. Fetching the ix tree went from 196.81s to 4.06s cold
-      # and from 170.09s to 0.28s warm. Six commits carry it, landed from
-      # indexable-inc/nix#22, #23 and #28:
-      #   75e10004b read the snapshot jj already took
-      #   193e34651 pin the jj file list to the commit already resolved
-      #   1cffe1a37 the mutation test needs a collector the sanitizer lane lacks
-      #   a099b1e7b read a pinned jj revision from Git, not one process per file
-      #   2e001c72b give the jj counter a shebang the sandbox has
-      #   1c1dba1da pin that a conflicted revision never reads as Git
+      # This tip carries the jj fetcher rewrite: reading a jj revision goes
+      # through the Git backing store rather than a subprocess per file, which
+      # measured 197s to 4s cold and 170s to 0.3s warm on this repo's own
+      # `ix/` view. Every jj-input flake evaluation pays that, so the bump is
+      # worth taking ahead of the scheduled sync.
       #
-      # The other five commits in the range are someone else's: two drop the
-      # eval identity harness and its fleet inventory from maintainers/, one
-      # drops comments referring to things a reader of this repo cannot follow,
-      # and 8c049a249 plus fb51b07da let a Git workdir status survive a
-      # lazily-fetchable object, which is the partial-clone fix ENG-11804
-      # tracks.
+      # This range is where nine PRs merged inside a few minutes, and the pin
+      # deliberately sits after the three commits that made their union work
+      # rather than anywhere inside it. The union did not compile
+      # (nix-expr-tests, run 30664328290) because the parallel evaluator port
+      # took value.hh from the tree it was written against, which predates two
+      # upstream additions, so a textually clean merge reverted them. Fixing
+      # that exposed three more reversions underneath, none of them compile
+      # errors: `printFailed` rendering «failed» against its own comment, the
+      # evaluator's error positions with no expectation updates, and
+      # `Failed::rethrow()` losing the clone that stops a re-forced failure's
+      # trace mutating the cached exception. All five are ENG-11672. Anything
+      # pinned between the parallel-eval merge and 2d7585afe7b1 builds and runs
+      # but carries the last three as live regressions.
       #
-      # What a consumer will notice. A `jj:` input resolves through the Git
-      # store rather than a process per file, so for anything already working
-      # the wall clock above is the whole change. A conflicted jj revision is
-      # now refused rather than read as though its conflict markers were file
-      # content; 1c1dba1da is the test that pins that, and it is a behaviour
-      # change for anyone who was fetching a conflicted revision and getting a
-      # plausible-looking tree back.
+      # What a consumer will notice. Infinite recursion and stack overflow are
+      # now reported at the site that forced the value rather than at the
+      # recursive thunk's own expression, because claiming a thunk overwrites
+      # the words that held its environment and expression; that is
+      # unconditional, not gated on `eval-cores`, and doc/manual/rl-next
+      # records it. The evaluator itself is off by default: `eval-cores`
+      # defaults to 1 and is admitted only with the `parallel-eval`
+      # experimental feature. The lazy-trees stack is untouched by the range
+      # (paths.cc is byte-identical across it), so indexable-inc/index#4297
+      # stands unchanged.
       #
-      # Gated by nix's own tests only, the same caveat every previous bump
-      # recorded, plus one gap worth stating outright. On all three PRs the
-      # plain `tests on ubuntu` lane was killed by GitHub hosted-runner OOM and
-      # not by any test: the functional suite concluded success and the kill
-      # landed in the later flake-checks and tarball step, so no step anywhere
-      # in that set concluded failure from a real test. The sanitizer lane,
-      # which runs the same 226 tests under sanitizers, concluded success on
-      # all three. Post-push run 30728162133 on this rev had eval, pre-commit
-      # checks and aggregate basic checks green with both test lanes still
-      # running when this pin was written. Locally on aarch64-darwin -- which
-      # CI does not cover at all, since d36b96025 dropped the darwin jobs -- the
-      # full functional suite is green on this exact rev: meson Ok 188, Fail 0,
-      # Skipped 38, with fetchJj and jj-colocated executed rather than skipped
-      # (requireJj fails rather than skips, so that is a real run).
+      # Gated by nix's own tests only, which is the same caveat the previous
+      # bump recorded: run 30668180224 is green on this rev across both tests
+      # jobs, VM tests, flake checks, installer tests and the sanitizer
+      # configuration. Neither the parallel evaluator nor the read-set
+      # instrumentation series has a lib/fork-packages.nix intent entry, so
+      # both default to `hold` and cannot be sent upstream until someone
+      # classifies them.
       url = "github:indexable-inc/nix/1c1dba1da9dde353904db44302140bdd8ad58475";
       flake = false;
     };
@@ -273,20 +275,6 @@
     # indexable-inc/nix-fast-build onto the matching tag and repin.
     nix-fast-build-src = {
       url = "github:indexable-inc/nix-fast-build/6b976a8b2f8252942312599e6bfec20cec207f97";
-      flake = false;
-    };
-
-    # jj megamerge fork of Gabriella439/Haskell-Nix-Derivation-Library, the
-    # `nix-derivation` Haskell library nix-output-monitor parses .drv files
-    # with. The upstream repo publishes no
-    # tags; this rev is upstream main while the cabal version still reads
-    # 1.1.3 -- the hackage release nixpkgs builds -- PLUS the post-release
-    # dependency-bound relaxations (QuickCheck 2.15, filepath 1.5) hackage
-    # carries as cabal revisions, so overriding the hackage sdist with this
-    # tree keeps the same dependency envelope. autoUpdate = false: repin when
-    # nixpkgs moves to a newer nix-derivation.
-    nix-derivation-src = {
-      url = "github:indexable-inc/Haskell-Nix-Derivation-Library/ba78008319f3517013a9fd70245ecee5ab2054b4";
       flake = false;
     };
 
@@ -460,7 +448,6 @@
     codex-src,
     nix-src,
     nix-fast-build-src,
-    nix-derivation-src,
     rnix-0-12-src,
     rnix-0-14-src,
     ghostty-src,
@@ -477,11 +464,26 @@
     # lib/per-system.nix have a single source of truth.
     # The data-subtree entries below resolve to the `outPath` of relative-path
     # inputs (declared `flake = false` above) instead of bare `./<dir>`
-    # literals, so each consumer's source identity is scoped to just that
-    # subtree. Nix-code roots the flake imports directly (`modules`,
-    # `packagesRoot`) and the whole-repo `root` (the lint source intentionally
-    # covers the entire tree) stay ordinary relative paths: those are
-    # import-time / whole-repo by design, not per-subtree source identity.
+    # literals. What that does NOT buy, despite what this comment used to say,
+    # is per-subtree source identity. A relative-path input resolves to a
+    # subpath of the whole flake source, so any commit anywhere in the repo
+    # moves it. Measured on a clean tree at main, and the same store path from
+    # a local checkout and from a fetched `github:indexable-inc/index/<rev>`:
+    #
+    #   inputs.skills.outPath
+    #     -> /nix/store/v53pc7hv0h0aq3768j7zgxz0kl23a6zn-source/./packages/agent/skills
+    #
+    # Recorded because the claim it replaces would send someone here for a
+    # consumer that must not rebuild on an unrelated commit, where this shape
+    # would quietly do nothing. `builtins.path` is what does that: it hashes
+    # the directory alone, so the store path moves only when the directory
+    # does. lib/kernel/kbuild-unit.nix already used it and the vendored forks
+    # in lib/default.nix now do too.
+    #
+    # Nix-code roots the flake imports directly (`modules`, `packagesRoot`) and
+    # the whole-repo `root` (the lint source intentionally covers the entire
+    # tree) stay ordinary relative paths: those are import-time / whole-repo by
+    # design.
     paths = {
       root = ./.;
       skills = skills.outPath;
@@ -545,7 +547,6 @@
         codex-src
         nix-src
         nix-fast-build-src
-        nix-derivation-src
         rnix-0-12-src
         rnix-0-14-src
         ghostty-src
@@ -580,9 +581,22 @@
       inherit lib ix paths home-manager nixpkgs;
       indexPackages = system: collected.packages."${system}";
     };
+    loomConfiguration = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      specialArgs.loomPackage = perSystem.x86_64-linux.packages.loom;
+      modules = [./packages/loom/nixos.nix];
+    };
+    # A plain ix template deliberately leaves root-device and bootloader facts
+    # to the platform's injected machine profile. Extend the same configuration
+    # as a container only for the flake check, so NixOS can realize its closure
+    # without inventing guest hardware facts in the public template.
+    loomTemplateCheck = loomConfiguration.extendModules {
+      modules = [{boot.isContainer = true;}];
+    };
   in {
     lib = ix;
     inherit (ix) nixosModules;
+    nixosConfigurations.loom = loomConfiguration;
     inherit (homeSurface) darwinModules homeModules;
     overlays.default = ix.overlay;
     templates = {};
@@ -592,6 +606,9 @@
         systemChecks
         // {
           personal-light-profile = (homeSurface.personalLightProfile system).activationPackage;
+        }
+        // lib.optionalAttrs (system == "x86_64-linux") {
+          loom-template = loomTemplateCheck.config.system.build.toplevel;
         }
     ) (collected.collect "checks");
     # Sharded keying of the same check derivations for the memory-bounded CI

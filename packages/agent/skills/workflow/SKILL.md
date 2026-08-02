@@ -108,7 +108,9 @@ squash, and revert commits are exempt.
 tags on commits that are already reachable from `main`.
 
 Contributor setup and local checks live in [`CONTRIBUTING.md`](CONTRIBUTING.md).
-Run the repo lint before committing. In this repository that is:
+Run the repo lint before committing.
+
+In **index** that is:
 
 ```sh
 nix run .#lint

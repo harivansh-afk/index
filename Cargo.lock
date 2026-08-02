@@ -1013,7 +1013,6 @@ dependencies = [
  "audio-blob",
  "audio-clock",
  "audio-engine",
- "audio-instrument",
  "audio-net",
  "audio-score",
  "tempfile",
@@ -6089,7 +6088,6 @@ dependencies = [
  "ix-usage-core",
  "libc",
  "nix 0.31.3",
- "rusqlite",
  "serde",
  "serde_json",
  "tempfile",
@@ -6621,6 +6619,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f50e8f47623268b5407192d26876c4d7f89d686ca130fdc53bced4814cd29f8"
 dependencies = [
  "bitflags 2.13.0",
+]
+
+[[package]]
+name = "linear-file"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
