@@ -93,14 +93,20 @@ pub fn render_mirror(record: &ir::Record, ctx: &TyCtx<'_>) -> Result<TokenStream
         from.push(widened);
 
         let take = quote!(self.#ident);
-        let narrowed = if let Some(converted) = convert::bytes_field_inward(&field.ty, &take) {
-            quote!(#ident: #converted,)
-        } else {
-            convert::inward(&field.ty, ctx, &take).map_or_else(
-                || quote!(#ident: #take,),
-                |converted| quote!(#ident: #converted?,),
-            )
-        };
+        // Read inside out: the bytes conversion wins when it applies, and the
+        // general inward conversion is the fallback. Written as nested
+        // `map_or_else` rather than `if let/else` because `clippy::nursery`
+        // denies `option_if_let_else`, and as the same shape as `widened`
+        // above so both halves of the round trip read alike.
+        let narrowed = convert::bytes_field_inward(&field.ty, &take).map_or_else(
+            || {
+                convert::inward(&field.ty, ctx, &take).map_or_else(
+                    || quote!(#ident: #take,),
+                    |converted| quote!(#ident: #converted?,),
+                )
+            },
+            |converted| quote!(#ident: #converted,),
+        );
         into.push(narrowed);
     }
 

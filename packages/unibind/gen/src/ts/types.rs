@@ -103,8 +103,11 @@ pub fn ts_type(
 ) -> Result<String, EmitError> {
     Ok(match ty {
         ir::Type::Bool => "boolean".to_owned(),
-        ir::Type::Int(_) => "number".to_owned(),
-        ir::Type::Float(_) => "number".to_owned(),
+        // TypeScript has one numeric type, so the IR's integer and float
+        // widths both land on `number`. The width is not lost: it is enforced
+        // at the boundary by the generated range checks, not by the declared
+        // TypeScript type.
+        ir::Type::Int(_) | ir::Type::Float(_) => "number".to_owned(),
         ir::Type::String { .. } | ir::Type::Path { .. } => "string".to_owned(),
         ir::Type::Bytes { .. } => {
             if level.bytes_as_buffer() {
