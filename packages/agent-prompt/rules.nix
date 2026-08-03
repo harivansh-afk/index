@@ -1499,12 +1499,38 @@
         is fundamentally right. On finding a fundamentally better design,
         even a major one, surface it unprompted and put the choice to the
         user with the AskUserQuestion tool, costs
-        named; this early, the rework is usually wanted.
+        named; this early, the rework is usually wanted. The better shape is
+        often smaller than the patch, though, so it wants noticing rather
+        than escalating: prefer the form that makes a class impossible over
+        the one that removes the instance. The tell is maintenance you are
+        about to sign up for. An exception list, a retry loop, a check keyed
+        on how something is spelled: each has to be kept correct as the world
+        moves, and each usually has a version with nothing to keep.
       '';
       reason = ''
         A jobs-registry death (index#3839) drew a three-patch fix on a shape
         the author thought wrong; the ledger redesign surfaced only when the
         user asked "would you design it differently".
+
+        The smaller-shape clause was added 2026-08-02, after the pattern
+        recurred three times in one session across unrelated domains. A
+        dev-node occupancy check was going to list `~/.ssh/agent` as an
+        exclusion, because a recursive scan of home directories is disturbed
+        by the ssh connection doing the scanning; reading only the top-level
+        mtimes is immune by construction and needs no list, measured as
+        `/home/andrew` staying at 2026-07-30T23:21 while the connection
+        stamped `~/.ssh/agent/` at 03:31:30. A retry loop stood in for a
+        signal the kernel already raises. A lint tested the syntactic shape
+        of an operand where testing its type held on every path.
+
+        Stated as a preference with a tell rather than as a prohibition,
+        because each of those patches was a correct fix for the instance in
+        front of its author and none looked wrong at the time. What they
+        share is not an error but a commitment: something a later change can
+        silently invalidate, with no failure at the moment it does. An
+        exclusion list is the clearest case, since the entry that goes
+        missing produces no error at all, only a check that quietly stops
+        discriminating.
       '';
     };
   }
