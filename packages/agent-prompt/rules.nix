@@ -666,6 +666,39 @@
     };
   }
   {
+    devNodeClaim = {
+      topics = ["workflow"];
+      text = ''
+        A dev node is claimed in writing before use and released in writing
+        when you stop, and you never deploy to one you did not claim. Idle
+        does not mean free: check occupancy by the `dev-nodes` skill before
+        taking a box, because every individual signal has been seen
+        reporting free on one that was not, and someone announcing their own
+        release is not the same statement as the box being unoccupied.
+      '';
+      reason = ''
+        Moved into the repository 2026-08-02 at the user's decision
+        (ENG-11862). The convention had lived only in a personal
+        instructions file: no diff, no review, no history, on the rule with
+        the highest cost of failure we have. It was corrected three times in
+        two hours that night, each correction a real measurement, and three
+        sessions were left holding three versions with one current.
+
+        Split deliberately. The volatile half is the occupancy signals,
+        which are empirical and decay, and it lives in the `dev-nodes` skill
+        where an amendment is one commit to one document. The stable half is
+        this: claim, release, and do not read idle as free. That has not
+        changed and has to be present at the moment somebody reaches for a
+        box, which is what an always-on rule is for and what a skill nobody
+        loaded is not.
+
+        The cost being avoided is concrete: a dev box that looked unused got
+        a second deploy on top of an in-flight experiment, and on 2026-08-02
+        two boxes would have been taken on a quiet signal alone.
+      '';
+    };
+  }
+  {
     claimBeforeDispatch = {
       topics = ["workflow"];
       text = ''
