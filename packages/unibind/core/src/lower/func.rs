@@ -32,7 +32,12 @@ impl Kind<'_> {
 }
 
 pub(super) fn lower_fn(func: &syn::ItemFn, declared: &Declared) -> Result<ir::Function> {
-    lower_callable(&func.attrs, &func.sig, declared, Kind::Free)
+    lower_callable(Callable {
+        attributes: &func.attrs,
+        signature: &func.sig,
+        declared,
+        kind: Kind::Free,
+    })
 }
 
 /// Reject signature shapes that never cross the binding boundary (unsafe,
@@ -61,12 +66,22 @@ fn reject_unsupported(signature: &syn::Signature) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn lower_callable(
-    attributes: &[syn::Attribute],
-    signature: &syn::Signature,
-    declared: &Declared,
-    kind: Kind<'_>,
-) -> Result<ir::Function> {
+/// One callable to lower: its attributes, signature, the module's declared
+/// types, and which callable position it sits in.
+pub(super) struct Callable<'a> {
+    pub(super) attributes: &'a [syn::Attribute],
+    pub(super) signature: &'a syn::Signature,
+    pub(super) declared: &'a Declared,
+    pub(super) kind: Kind<'a>,
+}
+
+pub(super) fn lower_callable(callable: Callable<'_>) -> Result<ir::Function> {
+    let Callable {
+        attributes,
+        signature,
+        declared,
+        kind,
+    } = callable;
     reject_unsupported(signature)?;
     let asyncness = match signature.asyncness {
         Some(token) => {

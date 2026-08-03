@@ -217,7 +217,12 @@ impl UnibindMeta {
     /// rename, and the Python exception base class for `#[unibind::error]`
     /// enums.
     fn apply_py(&mut self, entry: &syn::Meta) -> Result<()> {
-        parse_backend_name_or_base(entry, "py", &mut self.py_name, &mut self.py_base)
+        let parsed = parse_backend_name_or_base(entry, "py")?;
+        match parsed.slot {
+            NameOrBase::Name => self.py_name = Some(parsed.value),
+            NameOrBase::Base => self.py_base = Some(parsed.value),
+        }
+        Ok(())
     }
 
     /// Parse `ts(name = "...")`: the TypeScript-side rename.
@@ -236,7 +241,12 @@ impl UnibindMeta {
     /// rename, and the Java exception base class for `#[unibind::error]`
     /// enums.
     fn apply_jvm(&mut self, entry: &syn::Meta) -> Result<()> {
-        parse_backend_name_or_base(entry, "jvm", &mut self.jvm_name, &mut self.jvm_base)
+        let parsed = parse_backend_name_or_base(entry, "jvm")?;
+        match parsed.slot {
+            NameOrBase::Name => self.jvm_name = Some(parsed.value),
+            NameOrBase::Base => self.jvm_base = Some(parsed.value),
+        }
+        Ok(())
     }
 
     /// Parse `backends(py, ts, ex, jvm)`: which enabled backends an export
@@ -363,14 +373,28 @@ impl UnibindMeta {
     }
 }
 
-/// Parse one `name = "..."` / `base = "..."` pair into the backend's rename
-/// and base-class slots (`py` and `jvm` accept both options).
-fn parse_backend_name_or_base(
-    entry: &syn::Meta,
-    backend: &str,
-    name: &mut Option<String>,
-    base: &mut Option<String>,
-) -> Result<()> {
+/// Which of a backend's two string options a parsed pair fills.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NameOrBase {
+    /// `name = "..."`: the backend-side rename.
+    Name,
+    /// `base = "..."`: the backend-side exception base class.
+    Base,
+}
+
+/// One parsed `name = "..."` / `base = "..."` pair.
+struct BackendNameOrBase {
+    slot: NameOrBase,
+    value: String,
+}
+
+/// Parse one `name = "..."` / `base = "..."` pair for a backend that accepts
+/// both options (`py` and `jvm`).
+///
+/// Returns which slot the pair names rather than writing through two
+/// same-typed `&mut Option<String>` out-params, where a transposed pair would
+/// have compiled and silently swapped a rename for a base class.
+fn parse_backend_name_or_base(entry: &syn::Meta, backend: &str) -> Result<BackendNameOrBase> {
     let span = entry.span();
     let syn::Meta::NameValue(pair) = entry else {
         return Err(LowerError::new(
@@ -389,17 +413,19 @@ fn parse_backend_name_or_base(
         ));
     };
     let slot = if pair.path.is_ident("name") {
-        name
+        NameOrBase::Name
     } else if pair.path.is_ident("base") {
-        base
+        NameOrBase::Base
     } else {
         return Err(LowerError::new(
             span,
             format!("unknown `{backend}` option; expected name = \"...\" or base = \"...\""),
         ));
     };
-    *slot = Some(value.value());
-    Ok(())
+    Ok(BackendNameOrBase {
+        slot,
+        value: value.value(),
+    })
 }
 
 fn parse_backend_name(entry: &syn::Meta, backend: &str) -> Result<String> {

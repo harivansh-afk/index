@@ -131,17 +131,35 @@ fn lower_path(path: &syn::TypePath, declared: &Declared, position: Position) -> 
                 value: Box::new(lower_type(pair.value, declared, Position::Owned)?),
             })
         }
-        _ => lower_named(path, segment, &ident, declared, position),
+        _ => lower_named(
+            NamedPath {
+                path,
+                segment,
+                ident: &ident,
+            },
+            declared,
+            position,
+        ),
     }
 }
 
-fn lower_named(
-    path: &syn::TypePath,
-    segment: &syn::PathSegment,
-    ident: &str,
-    declared: &Declared,
-    position: Position,
-) -> Result<ir::Type> {
+/// The single path segment a named type resolves through, with its stringified
+/// ident.
+///
+/// Three views of one syntax node, kept together so a caller cannot hand
+/// `lower_named` a `segment` and `ident` that came from different paths.
+struct NamedPath<'a> {
+    path: &'a syn::TypePath,
+    segment: &'a syn::PathSegment,
+    ident: &'a str,
+}
+
+fn lower_named(named: NamedPath<'_>, declared: &Declared, position: Position) -> Result<ir::Type> {
+    let NamedPath {
+        path,
+        segment,
+        ident,
+    } = named;
     no_generics(segment)?;
     if path.path.segments.len() != 1 {
         return Err(unsupported(&syn::Type::Path(path.clone())));

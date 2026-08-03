@@ -43,7 +43,10 @@ pub fn render_object(object: &ir::Object, ctx: &Ctx<'_>) -> Result<TokenStream, 
         }
         methods.push(render_method(method, ctx, &object.name)?);
     }
-    let resource_surface = object.resource.then(|| resource::surface(object));
+    let resource_surface = object
+        .resource
+        .then(|| resource::surface(object))
+        .transpose()?;
     let leak_warning = object.resource.then(|| resource::leak_warning(object));
 
     Ok(quote! {

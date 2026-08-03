@@ -25,6 +25,8 @@ struct Declaration {
 #[derive(Debug)]
 struct ImplBlock {
     name: String,
+    /// Points a merge failure at the `impl` block's self type.
+    span: Span,
     constructor: Option<SpannedFn>,
     methods: Vec<ir::Function>,
 }
@@ -99,6 +101,7 @@ impl Objects {
         }
         let mut block = ImplBlock {
             name,
+            span: item.self_ty.span(),
             constructor: None,
             methods: Vec::new(),
         };
@@ -123,10 +126,24 @@ impl Objects {
             impls,
         } = self;
         for block in impls {
-            let declaration = declarations
+            // lower_impl already refused any block whose target is not a
+            // declared object, so this only fires if the pre-scan that fills
+            // `Declared` and the struct pass that fills `declarations` ever
+            // disagree. A proc macro must answer that with a diagnostic: an
+            // unwrap here surfaces to the user as a macro panic with no span.
+            let Some(declaration) = declarations
                 .iter_mut()
                 .find(|declaration| declaration.object.name == block.name)
-                .expect("impl targets were validated against declared objects");
+            else {
+                return Err(LowerError::new(
+                    block.span,
+                    format!(
+                        "`{}` has an impl block but no #[unibind::object] \
+                         declaration in this module",
+                        block.name
+                    ),
+                ));
+            };
             declaration.object.methods.extend(block.methods);
             if let Some(constructor) = block.constructor {
                 if declaration.object.constructor.is_some() {
@@ -159,12 +176,12 @@ impl ImplBlock {
     fn lower_method(&mut self, method: &syn::ImplItemFn, declared: &Declared) -> Result<()> {
         if let Some(receiver) = method.sig.receiver() {
             validate_receiver(receiver)?;
-            self.methods.push(func::lower_callable(
-                &method.attrs,
-                &method.sig,
+            self.methods.push(func::lower_callable(func::Callable {
+                attributes: &method.attrs,
+                signature: &method.sig,
                 declared,
-                func::Kind::Method,
-            )?);
+                kind: func::Kind::Method,
+            })?);
             return Ok(());
         }
         let meta = attrs::UnibindMeta::from_attrs(&method.attrs)?;
@@ -181,12 +198,12 @@ impl ImplBlock {
                 "an object takes one constructor",
             ));
         }
-        let function = func::lower_callable(
-            &method.attrs,
-            &method.sig,
+        let function = func::lower_callable(func::Callable {
+            attributes: &method.attrs,
+            signature: &method.sig,
             declared,
-            func::Kind::Constructor { object: &self.name },
-        )?;
+            kind: func::Kind::Constructor { object: &self.name },
+        })?;
         self.constructor = Some(SpannedFn {
             function,
             span: method.sig.ident.span(),

@@ -114,13 +114,13 @@ fn result_parts(segment: &syn::PathSegment) -> Result<OkErr<'_>> {
             _ => None,
         })
         .collect();
-    let [ok, error]: [&syn::Type; 2] = types.as_slice().try_into().map_err(|_| {
-        LowerError::new(
+    let [ok, error] = types.as_slice() else {
+        return Err(LowerError::new(
             segment.span(),
             "spell the Result out as Result<T, YourError>; type aliases hide \
              the error type from the macro",
-        )
-    })?;
+        ));
+    };
     Ok(OkErr { ok, error })
 }
 

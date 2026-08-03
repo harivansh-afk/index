@@ -45,12 +45,23 @@ pub fn record_attrs(record: &ir::Record) -> RenderedRecord {
 /// new bound on field types.
 pub fn constructor(record: &ir::Record, user: &Ident) -> Result<TokenStream, RenderError> {
     let name = Ident::new(&record.name, Span::call_site());
-    let class_name = record.names.py.clone().unwrap_or_else(|| record.name.clone());
+    let class_name = record
+        .names
+        .py
+        .clone()
+        .unwrap_or_else(|| record.name.clone());
     let mut params = Vec::new();
     let mut field_idents = Vec::new();
     let mut plain_idents = Vec::new();
     let mut py_names = Vec::new();
     let mut signature = Vec::new();
+    // Only the trailing run of `Option` fields may default to None. Found once
+    // by position of the last required field, so the loop neither re-scans the
+    // tail per field nor slices with an index the compiler cannot bound.
+    let last_required = record
+        .fields
+        .iter()
+        .rposition(|field| !matches!(field.ty, ir::Type::Option(_)));
     for (index, field) in record.fields.iter().enumerate() {
         let ident = Ident::new(&field.name, Span::call_site());
         let py_ident = render::name_ident(field.names.py.as_ref().unwrap_or(&field.name))?;
@@ -58,10 +69,7 @@ pub fn constructor(record: &ir::Record, user: &Ident) -> Result<TokenStream, Ren
         plain_idents.push(ident.clone());
         py_names.push(field.names.py.clone().unwrap_or_else(|| field.name.clone()));
         params.push(quote!(#py_ident: #ty));
-        if matches!(field.ty, ir::Type::Option(_))
-            && record.fields[index..]
-                .iter()
-                .all(|field| matches!(field.ty, ir::Type::Option(_)))
+        if matches!(field.ty, ir::Type::Option(_)) && last_required.is_none_or(|last| index > last)
         {
             signature.push(quote!(#py_ident = None));
         } else {
