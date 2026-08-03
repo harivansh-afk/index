@@ -145,7 +145,7 @@
     # the indexable-inc/rust-clippy `ix-patched` megamerge (upstream base
     # 512551c8 plus the lint patch DAG).
     clippy-src = {
-      url = "github:indexable-inc/rust-clippy/cd551e2408a75638f6b0ac7ea88aa0dd18b8aea3";
+      url = "github:indexable-inc/rust-clippy/b84112064b3683e58a981c0e4e61fa71f0c997a9";
       flake = false;
     };
 

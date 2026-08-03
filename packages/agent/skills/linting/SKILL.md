@@ -111,6 +111,30 @@ the fork understands and stock clippy does not.
 So check the exit code, never the absence of a string in a log. `grep -c error`
 returning zero is not a pass when the exit code was 101.
 
+## Counting awaits needs a negative lookahead
+
+`.awaited(` contains `.await` as a substring, so the obvious count is wrong:
+
+```sh
+rg -c '\.await' file.rs           # WRONG: double-counts every instrumented site
+rg -c '\.await(?!ed\()' file.rs   # right
+```
+
+`x.awaited("name").await` is one await, and the naive pattern reports two.
+
+The error has a direction, and it is the bad one. ix's observability helper is
+`Awaited::awaited`, so **await counts appear to GROW as instrumentation lands**,
+purely because instrumenting introduces the substring. Anyone measuring "how
+many uninstrumented awaits are left" with a plain grep watches the number rise
+while the codebase improves, and reports the work as making things worse.
+
+Found on 2026-08-01 while checking why `uninstrumented_await` had not fired on
+`switch_ops.rs::timed_phase`. The naive count said two awaits and one span --
+mixed, and therefore a false negative in the lint. The function has exactly one
+await and it is instrumented: `fut.awaited(phase).await`. The lint was right and
+the measurement was wrong, which is the direction that gets a working guard
+deleted.
+
 A `clippy.toml` key must land in the same change that ships its lint in the
 fork, never ahead of it. A forward declaration, the key added first so the lint
 has its config waiting, aborts clippy for every crate in the workspace until the
