@@ -7263,6 +7263,12 @@
   devProfileFortifyTest = import ./dev-profile-fortify.nix {
     inherit lib pkgs ix;
   };
+
+  # Guard for `ix.dev.profiles.rust` being reachable from a consumer's module.
+  # Eval-only; forced by the `eval` aggregate below.
+  devProfilesRustTest = import ./dev-profiles-rust.nix {
+    inherit lib pkgs ix paths;
+  };
 in {
   inherit
     groupTests
@@ -7294,6 +7300,7 @@ in {
       provenanceTest
       cargoUnitPrebuiltTest
       devProfileFortifyTest.wiringReachesUnits
+      devProfilesRustTest
     ]
   );
 }

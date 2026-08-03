@@ -568,6 +568,12 @@
   caller's package set. The default `rustWorkspace` uses the repo's
   `x86_64-linux` package set for image and module evaluation.
   */
+  # Bound here rather than inline in `rustWorkspaceFor` below because two
+  # consumers need it: that workspace builder, and `sharedHelpers`, which is
+  # the `ix` module argument `lib/dev/profiles.nix` builds the dev toolchain
+  # through.
+  rustToolchainFor = languages.rust.toolchain;
+
   rustWorkspaceFor = import ./rust/workspace.nix {
     inherit
       lib
@@ -582,7 +588,7 @@
       pins
       ;
     ghosttySrc = ghostty-src;
-    rustToolchainFor = languages.rust.toolchain;
+    inherit rustToolchainFor;
   };
   rustWorkspace = rustWorkspaceFor pkgs;
 
@@ -757,6 +763,7 @@
       repoRustToolchainFor
       rnixDigitSeparators
       ruffAnnArgs
+      rustToolchainFor
       rustWorkspace
       rustWorkspaceFor
       secretRefs
