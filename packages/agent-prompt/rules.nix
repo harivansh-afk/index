@@ -215,6 +215,34 @@
     };
   }
   {
+    jjViews = {
+      text = ''
+        A jj repo can publish subtrees as repositories of their own via
+        `jj views` (status | fetch | push): the derived history's hashes
+        match the published repo's, so `jj views push -r <rev>` sends an
+        ordinary fast-forwardable branch there and prints the PR URL.
+        `jj git push` moves only the containing repo's bookmarks, so
+        landing subtree work upstream takes both, in that order. When
+        `jj views status` says diverged, run `jj views fetch`, integrate
+        with `jj new <main> <lifted-tip>` as a two-parent merge, and
+        never rebase the lifted commits: their hashes are already
+        published. The push refuses an undescribed tip, so describe the
+        revision (or push `-r` a described one) rather than reaching for
+        `--allow-empty-description`. `~/.config/nix` on the operator's
+        machines is such a repo, with `ix/` as a view of ix; work landed
+        only to its own origin has not reached ix until the view is
+        pushed and merged.
+      '';
+      reason = ''
+        On 2026-08-02 a session landed a day of claude-html work to the
+        personal repo's main and reported it done; the ix view was six
+        commits behind until the operator pointed at `jj views push`.
+        The tool's own hints cover the mechanics, but only once you know
+        it exists and that `jj git push` alone is half a landing.
+      '';
+    };
+  }
+  {
     validate = {
       topics = ["verification"];
       text = ''
