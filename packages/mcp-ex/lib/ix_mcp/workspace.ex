@@ -36,12 +36,13 @@ defmodule IxMcp.Workspace do
              "alias IxMcp.Ask; alias IxMcp.Cmd; alias IxMcp.Issues; alias IxMcp.Sessions; " <>
              "alias IxMcp.Requests"
 
-  @typedoc "Who is writing: the cell's job, its intent, and its session row."
+  @typedoc "Who is writing: the cell's job, when it began, its intent, and its session row."
   @type writer :: %{
           job: String.t() | nil,
           intent: String.t() | nil,
           session_id: integer() | nil,
-          session: String.t() | nil
+          session: String.t() | nil,
+          started_at: DateTime.t() | nil
         }
 
   @typedoc "What a recorded write knows about itself."
@@ -220,11 +221,6 @@ defmodule IxMcp.Workspace do
   end
 
   defp rebind(name, was, theirs, value, mine, warnings, contested) do
-    warning =
-      "#{severity(theirs, mine)}: shared binding: `#{name}` was bound #{ago(theirs.at, mine.at)} " <>
-        "by #{origin(theirs, mine)} as #{shape(was, theirs)}; this cell rebinds it as " <>
-        "#{shape(value, mine)}. #{tail(theirs, mine)}"
-
     contested =
       cond do
         theirs.tag == mine.tag -> Map.delete(contested, name)
@@ -232,7 +228,39 @@ defmodule IxMcp.Workspace do
         true -> Map.put(contested, name, %{was: theirs, now: mine})
       end
 
-    {[warning | warnings], contested}
+    {report(name, was, theirs, value, mine, warnings), contested}
+  end
+
+  # A same-typed rebind of a name whose previous cell had already finished is
+  # one agent reusing a scratch name across its own turn, which is most of
+  # what a kernel sees: `out` rebound by every cell of a session, reported on
+  # every one of them and telling either cell nothing it did not know. Left
+  # in, it buries the type change (#3967) -- the one with a raise waiting
+  # downstream -- so that one is never suppressed, overlap or not: there the
+  # cells are sequential by construction (A binds, B clobbers, A reads).
+  defp report(name, was, theirs, value, mine, warnings) do
+    if theirs.tag == mine.tag and not overlapped?(theirs, mine) do
+      warnings
+    else
+      [
+        "#{severity(theirs, mine)}: shared binding: `#{name}` was bound #{ago(theirs.at, mine.at)} " <>
+          "by #{origin(theirs, mine)} as #{shape(was, theirs)}; this cell rebinds it as " <>
+          "#{shape(value, mine)}. #{tail(theirs, mine)}"
+        | warnings
+      ]
+    end
+  end
+
+  # Were both cells alive at once? A write lands when its cell finishes, so a
+  # cell that started before that instant ran alongside the one it took the
+  # name from -- the only way two agents can surprise each other, and the
+  # thing one session's sequential cells never do. An unknown start time
+  # counts as overlapping: the guard reports rather than assumes.
+  defp overlapped?(theirs, mine) do
+    case {theirs.at, mine.started_at} do
+      {%DateTime{} = landed, %DateTime{} = began} -> DateTime.compare(began, landed) == :lt
+      _unknown -> true
+    end
   end
 
   defp restores?(contested, name, mine) do
@@ -366,6 +394,7 @@ defmodule IxMcp.Workspace do
       intent: writer.intent,
       session_id: writer.session_id,
       session: writer.session,
+      started_at: Map.get(writer, :started_at),
       at: now,
       tag: tag(value),
       shape: shape_of(value)

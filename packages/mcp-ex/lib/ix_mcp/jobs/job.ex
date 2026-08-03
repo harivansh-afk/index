@@ -426,7 +426,8 @@ defmodule IxMcp.Jobs.Job do
       job: state.id,
       intent: state.intent,
       session_id: state.session_id,
-      session: state.session
+      session: state.session,
+      started_at: state.started_at
     }
   end
 
