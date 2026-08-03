@@ -163,7 +163,8 @@ jobs:
           # invisible to `set -e`, so a failed `nix build` would leave PATH
           # untouched and surface later as `gh: command not found` -- and this
           # watchdog reports health, so a tool it cannot find must not read as
-          # a healthy lane.
+          # a healthy lane. Installables spelled literally, or
+          # workflow-nix-bootstrap.jq withdraws its nixpkgs-only exemption.
           tools="$(nix build --no-link --print-out-paths nixpkgs#gh nixpkgs#jq)"
           while read -r tool; do
             PATH="${tool}/bin:${PATH}"
