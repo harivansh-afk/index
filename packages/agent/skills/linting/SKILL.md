@@ -201,6 +201,37 @@ clean: the excerpt shows only hook noise, so you reach for `nix log`; the path
 in front of you is the wrapper, so the log says success; and if you do find the
 right one, the grep on its coloured output returns zero.
 
+### Two more, once you are finally reading the right log
+
+Both are about *counting*, and both hand you a number that looks like an answer.
+
+**Each cargo-unit crate builds two clippy derivations, and their findings are
+byte-identical.** Concatenating the two logs and counting therefore reports
+exactly twice the truth. On 2026-08-02 a comparison of three crates reported
+84 / 144 / 122 findings for `ix_server` / `ix_sdk_core` / `ix`; the real figures
+are 42 / 72 / 61, and `cmp` on the two per-derivation sets is clean. Compare and
+count **per derivation**, or dedupe before you count, and sanity-check the total
+against the `aborting due to N previous errors` line, which is clippy's own
+count and is per derivation.
+
+**A log with a non-zero error count and no `aborting due to N previous errors`
+line is incomplete, and must be refused rather than parsed.** Clippy always
+emits that summary when it aborts, so its absence means the log was cut short --
+most easily by two builds of near-identical derivations running at once. The
+same day, one truncated log carried 34 error lines and no summary; diffing it
+against a complete one produced a four-finding gap that read exactly like a
+regression introduced by the change under test, and was not. The check is two
+lines and worth having in anything that parses these:
+
+```sh
+n=$(rg -c '^error: ' "$log"); sum=$(rg -o 'aborting due to [0-9]+ previous error' "$log" | head -1)
+if [ -z "$sum" ] && [ "$n" -gt 0 ]; then echo "incomplete log, refusing" >&2; exit 3; fi
+```
+
+Whichever direction you are checking, remember an empty diff is the shape that
+looks identical when the parse is broken: prove the comparison can still fail by
+injecting a synthetic finding into a copy before you believe a clean one.
+
 ### And an empty run is the good case; the bad one is a full one
 
 On 2026-08-01 the same command produced the opposite shape, which is worse. An
