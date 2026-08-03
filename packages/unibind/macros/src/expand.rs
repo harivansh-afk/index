@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use unibind_core::LowerError;
 
-pub fn export(args: TokenStream, item: TokenStream) -> TokenStream {
+pub fn export(args: TokenStream, item: &TokenStream) -> TokenStream {
     let mut module = match syn::parse2::<syn::ItemMod>(item.clone()) {
         Ok(module) => module,
         Err(error) => {
@@ -203,7 +203,7 @@ fn splice_record_attrs<'a>(
     }
 }
 
-pub fn marker_outside_export(item: TokenStream, message: &str) -> TokenStream {
+pub fn marker_outside_export(item: &TokenStream, message: &str) -> TokenStream {
     let error = syn::Error::new(proc_macro2::Span::call_site(), message).to_compile_error();
     quote! { #item #error }
 }

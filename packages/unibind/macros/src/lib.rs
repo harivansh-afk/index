@@ -58,11 +58,11 @@ use proc_macro::TokenStream;
 /// build a cdylib with `napi_build::setup()`.
 #[proc_macro_attribute]
 pub fn export(args: TokenStream, item: TokenStream) -> TokenStream {
-    expand::export(args.into(), item.into()).into()
+    expand::export(args.into(), &item.into()).into()
 }
 
 fn marker_outside_export(item: TokenStream, message: &'static str) -> TokenStream {
-    expand::marker_outside_export(item.into(), message).into()
+    expand::marker_outside_export(&item.into(), message).into()
 }
 
 /// Mark a plain-data struct inside a `#[unibind::export]` module.
