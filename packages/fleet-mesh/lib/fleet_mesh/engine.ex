@@ -22,9 +22,14 @@ defmodule FleetMesh.Engine do
   engine whose reads are failing must not be mistaken for an engine
   reporting green.
 
-  First evaluation happens at init, synchronously before the first snapshot
-  can be served, so there is no window where a condition reads as absent
-  rather than as its actual state.
+  The first evaluation is scheduled immediately after init rather than run
+  inside it: a check can take a network round trip, and a host application
+  must not hang its boot on one. Until it completes, `snapshot/1` returns
+  `%{}`; a consumer that must distinguish "not evaluated yet" from "no
+  conditions" renders the empty map as still-evaluating. `refresh/2` is the
+  synchronous form: evaluate everything now and return the result, for
+  callers whose question is "what is true right now", not "what did the last
+  tick see".
   """
 
   use GenServer
@@ -100,11 +105,33 @@ defmodule FleetMesh.Engine do
               inspect(Enum.map(conditions, & &1.id))
     end
 
-    {:ok, Enum.reduce(conditions, state, &evaluate_and_schedule/2)}
+    {:ok, state, {:continue, :first_evaluation}}
+  end
+
+  @impl true
+  def handle_continue(:first_evaluation, state) do
+    {:noreply, Enum.reduce(Map.values(state.conditions), state, &evaluate_and_schedule/2)}
+  end
+
+  @doc """
+  Evaluate every condition now, synchronously, and return the resulting
+  snapshot. Edges fire exactly as on a scheduled evaluation. The scheduled
+  timers are untouched, so a refresh brings the next tick's answer forward
+  rather than replacing it. Checks run in the engine process; pass a
+  `timeout` sized to the slowest check.
+  """
+  @spec refresh(GenServer.server(), timeout()) :: states()
+  def refresh(server \\ __MODULE__, timeout \\ :infinity) do
+    GenServer.call(server, :refresh, timeout)
   end
 
   @impl true
   def handle_call(:snapshot, _from, state), do: {:reply, state.states, state}
+
+  def handle_call(:refresh, _from, state) do
+    refreshed = Enum.reduce(Map.values(state.conditions), state, &evaluate_only/2)
+    {:reply, refreshed.states, refreshed}
+  end
 
   def handle_call({:subscribe, pid, info}, _from, state) do
     already = for {other, %{info: i}} <- state.subscribers, other != pid, do: i
@@ -134,6 +161,11 @@ defmodule FleetMesh.Engine do
   @spec evaluate_and_schedule(Condition.t(), map()) :: map()
   defp evaluate_and_schedule(condition, state) do
     Process.send_after(self(), {:evaluate, condition.id}, condition.interval_ms)
+    evaluate_only(condition, state)
+  end
+
+  @spec evaluate_only(Condition.t(), map()) :: map()
+  defp evaluate_only(condition, state) do
     {next, detail} = Condition.evaluate(condition)
 
     case Map.get(state.states, condition.id) do

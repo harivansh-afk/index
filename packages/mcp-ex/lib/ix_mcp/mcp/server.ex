@@ -7,6 +7,7 @@ defmodule IxMcp.MCP.Server do
 
   alias IxMcp.Fleet.Topology
   alias IxMcp.Fleet.Watch
+  alias IxMcp.Fleet.WatchOffer
   alias IxMcp.MCP.Tools
 
   @protocol_version "2025-06-18"
@@ -51,6 +52,14 @@ defmodule IxMcp.MCP.Server do
 
       {"tools/call", id} when id != nil ->
         handle_tool_call(id, params)
+
+      # The handshake's last step: the client is now able to receive
+      # server-initiated requests, so this is the earliest moment an
+      # elicitation can reach the human. Standing warnings trigger a direct
+      # ask (once per boot); see IxMcp.Fleet.WatchOffer.
+      {"notifications/initialized", nil} ->
+        WatchOffer.maybe_offer()
+        nil
 
       {_notification, nil} ->
         nil
@@ -139,6 +148,7 @@ defmodule IxMcp.MCP.Server do
     own supervised BEAM process.
 
     #{fleet_preamble()}
+    #{warnings_preamble()}
     #{Tools.surface_guide()}
     """
   end
@@ -159,6 +169,47 @@ defmodule IxMcp.MCP.Server do
     # A handshake must not fail because a liveness probe did. Saying the
     # topology is unavailable is honest; refusing to connect is not.
     error -> "BEAM mesh: topology unavailable (#{Exception.message(error)})."
+  end
+
+  # The first message every session sees carries the fleet's standing
+  # warnings (user ask, ENG-12004 adjacent): the whole picture arrives once,
+  # with the handshake; only CHANGES are notification-worthy after that, and
+  # those are opt-in (Fleet.watch_warnings/1). Same affordance argument as
+  # the topology preamble above.
+  defp warnings_preamble do
+    snapshot = FleetMesh.Engine.snapshot()
+
+    standing =
+      for {id, %{state: state} = entry} <- snapshot, state != :green, do: {id, entry}
+
+    cond do
+      map_size(snapshot) == 0 ->
+        "Fleet warnings: none evaluated yet (no catalog loaded, or first read still running)."
+
+      standing == [] ->
+        "Fleet warnings: all #{map_size(snapshot)} conditions green. Fleet.warnings() for detail." <>
+          watch_offer()
+
+      true ->
+        "Fleet warnings STANDING:\n" <>
+          Enum.map_join(standing, "\n", fn {id, entry} ->
+            "- #{id}: #{entry.state} since #{DateTime.from_unix!(entry.since)}"
+          end) <> "\nFleet.warnings() for detail." <> watch_offer()
+    end
+  rescue
+    error -> "Fleet warnings: engine unavailable (#{Exception.message(error)})."
+  catch
+    :exit, _reason -> "Fleet warnings: engine unavailable (busy)."
+  end
+
+  # Surfaced to the HUMAN, via the model: the watch is opt-in precisely so
+  # agents do not each turn it on, which means the person has to know it is
+  # there to ask for it. One sentence, in the handshake, once.
+  defp watch_offer do
+    "\nTELL YOUR USER at the start of the session, once: " <>
+      "say \"watch fleet warnings\" to get a notification when any of these " <>
+      "change (green<->red); the agent then runs Fleet.watch_warnings/1. " <>
+      "One watcher per kernel; do not enable it unasked."
   end
 
   defp intent(%{"intent" => intent}) when is_binary(intent), do: intent

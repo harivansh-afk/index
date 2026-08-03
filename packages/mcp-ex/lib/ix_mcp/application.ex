@@ -39,6 +39,7 @@ defmodule IxMcp.Application do
     IxMcp.Cmd.capture_launch_cwd()
     route_crash_dumps()
     install_crash_log()
+    configure_fleet_policy()
 
     children =
       [
@@ -58,6 +59,10 @@ defmodule IxMcp.Application do
         # sessions viewing that document.
         IxMcp.Dashboard.Bridge,
         IxMcp.Jobs.Reaper,
+        # The one evaluator of the fleet warning catalog (its conditions come
+        # from the policy configured above). Before Watch, which reads its
+        # snapshot; also serves session-facing snapshot and edge subscribers.
+        FleetMesh.Engine,
         # After the notifier it pushes through (ENG-11209). Polls the fleet on a
         # timer, so it is started always rather than only under stdio: a kernel
         # driven by a test or a sibling instance still wants the mute state and
@@ -88,6 +93,27 @@ defmodule IxMcp.Application do
   end
 
   defp loom?, do: is_binary(System.get_env("LOOM_PARENT_VM"))
+
+  # The private warning catalog, loaded the same way TuiLocal loads tui_ex:
+  # an env var naming a compiled OTP app dir whose ebin joins the code path.
+  # The policy module itself stays out of this public tree; only its NAME
+  # crosses, and only at deploy time. Unset means the config default
+  # (Policy.Empty) stands, which is a kernel with no fleet catalog, not a
+  # broken one.
+  defp configure_fleet_policy do
+    case System.get_env("IX_MCP_FLEET_POLICY") do
+      nil ->
+        :ok
+
+      dir ->
+        true = Code.append_path(String.to_charlist(Path.join(dir, "ebin")))
+        module = Module.concat([System.get_env("IX_MCP_FLEET_POLICY_MODULE") || "FleetPolicy"])
+        # A misconfigured path must fail the boot loudly, not fall back to an
+        # empty catalog that reports a healthy fleet it never measured.
+        {:module, ^module} = Code.ensure_loaded(module)
+        Application.put_env(:fleet_mesh, :policy, module)
+    end
+  end
 
   defp agent_runner do
     if loom?(), do: IxMcp.Agents.LoomRunner, else: IxMcp.Agents.CliRunner

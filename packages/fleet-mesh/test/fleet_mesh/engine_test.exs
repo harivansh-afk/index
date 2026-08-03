@@ -131,6 +131,18 @@ defmodule FleetMesh.EngineTest do
     assert %{flip: %{state: :red}} = Engine.snapshot(server)
   end
 
+  test "refresh evaluates now and returns the new picture", context do
+    {:ok, agent} = Agent.start_link(fn -> :green end)
+    server = start_engine(context, [flippable(agent)])
+    {:ok, _} = Engine.subscribe(server)
+    assert_receive {:fleet_snapshot, _}
+
+    Agent.update(agent, fn _ -> {:red, :seen_by_refresh} end)
+    assert %{flip: %{state: :red, detail: :seen_by_refresh}} = Engine.refresh(server)
+    # The refresh emitted the edge exactly as a scheduled evaluation would.
+    assert_receive {:fleet_edge, :flip, :green, :red, :seen_by_refresh}
+  end
+
   test "an unconfigured policy fails at start, loudly" do
     Process.flag(:trap_exit, true)
     assert {:error, {%ArgumentError{}, _stack}} = Engine.start_link(name: :unconfigured_engine)

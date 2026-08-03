@@ -57,16 +57,20 @@ defmodule IxMcp.MCP.Tools do
                                                                 one category (also
                                                                 error, crit, alert,
                                                                 emerg)
-                                              "oom_burst"       one discrete alert
+                                              "<condition id>"  one discrete alert
                                             Fleet.unmute/1 undoes any of them,
-                                            Fleet.mutable() lists them all, and
-                                            Fleet.alerts() shows what is muted plus
-                                            what is standing. The MCP
-                                            logging/setLevel request raises the
-                                            severity floor for discrete alerts in
-                                            one go. Discrete ids: kernel_storage,
-                                            ci_oom_success, oom_burst,
-                                            observability_blind
+                                            Fleet.mutable() lists every id (the
+                                            discrete ones come from the loaded
+                                            policy catalog), and Fleet.alerts()
+                                            shows what is muted plus what is
+                                            standing. The MCP logging/setLevel
+                                            request raises the severity floor for
+                                            discrete alerts in one go.
+                                            Fleet.warnings() is the standing
+                                            snapshot; Fleet.watch_warnings/1
+                                            opts in to edge notifications
+                                            (usually only when the human asks;
+                                            one watcher per kernel)
       Fleet.topology()                      which hosts the BEAM is on (also in
                                             this server's connect instructions)
       Read.file(path)                       a file; Read.file(path, first, last) slices

@@ -27,12 +27,12 @@ defmodule IxMcp.Fleet do
   """
 
   alias IxMcp.ActionLog
-  alias IxMcp.Fleet.Alerts
   alias IxMcp.Fleet.Digest
   alias IxMcp.Fleet.Topology
   alias IxMcp.Fleet.Watch
 
   alias FleetMesh.Mesh
+  alias IxMcp.Fleet.WarningsWatch
 
   # The mesh client is FleetMesh.Mesh; these delegates keep the REPL surface
   # (`Fleet.exec` and friends) that sessions and docs already use, while the
@@ -111,9 +111,16 @@ defmodule IxMcp.Fleet do
   """
   @spec mutable() :: [String.t()]
   def mutable do
-    Alerts.ids() ++
-      ["digest", "heartbeat", "anomaly"] ++
+    policy_ids() ++
+      ["observability_blind", "digest", "heartbeat", "anomaly"] ++
       for(level <- ~w(warning error crit alert emerg), do: "digest:" <> level)
+  end
+
+  # observability_blind is not in the policy: a failed read surfaces as
+  # :unknown on the condition it broke and Watch synthesizes one blindness
+  # hit from those. It is mutable all the same, so it is named here.
+  defp policy_ids do
+    Enum.map(FleetMesh.Policy.configured!().conditions(), &Atom.to_string(&1.id))
   end
 
   @doc """
@@ -196,4 +203,39 @@ defmodule IxMcp.Fleet do
   """
   @spec forget(:all | String.t()) :: integer()
   def forget(scope \\ :all), do: ActionLog.forget_fleet_alerts(scope)
+
+  @doc """
+  The warning conditions' current states: `%{id => %{state, since, detail}}`
+  where state is `:green | :red | :unknown`. `%{}` means the first
+  evaluation has not finished (or no catalog is loaded). The same picture
+  every session gets in its connect instructions.
+  """
+  @spec warnings() :: FleetMesh.Engine.states()
+  def warnings, do: FleetMesh.Engine.snapshot()
+
+  @doc """
+  Opt this kernel in to warning EDGE notifications: one channel line per
+  transition (green -> red, red -> green, either -> unknown), on top of the
+  snapshot every session already gets on connect.
+
+  **Usually call this only when the human explicitly asks.** Every session
+  on this kernel shares one channel, one watcher covers everyone, and the
+  singleton makes a second watcher impossible: if someone already watches,
+  this returns `{:already_watching, who}` and changes nothing. `who` for
+  your own call comes from `requested_by`, so name yourself.
+  """
+  @spec watch_warnings(String.t()) :: :ok | {:already_watching, String.t() | nil}
+  def watch_warnings(requested_by \\ "unnamed session") do
+    case WarningsWatch.start(requested_by) do
+      {:ok, _pid} ->
+        :ok
+
+      {:error, {:already_started, _pid}} ->
+        {:already_watching, WarningsWatch.watcher()}
+    end
+  end
+
+  @doc "Stop the warning edge watch. `:ok` even when nothing was watching."
+  @spec unwatch_warnings() :: :ok
+  def unwatch_warnings, do: WarningsWatch.stop()
 end
