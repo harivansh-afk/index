@@ -97,13 +97,37 @@
     };
   }
   {
+    indexLivesInIx = {
+      topics = ["workflow"];
+      text = ''
+        Every change to index is a change to `ix:index/`: an ordinary commit
+        in an ordinary ix pull request, needing no second repository. Never
+        open one against the public `indexable-inc/index` repository. That
+        tree is downstream, so work landed there reaches neither ix nor the
+        fleet, and it is overwritten whenever the projection is published.
+        This covers all of index and not only the agent prompt: modules,
+        packages, lib, examples, skills and tests. Check which repository a
+        checkout is before the first edit, because the two trees hold the
+        same paths and an editor cannot tell you which one you opened: `git
+        remote get-url origin` ending in `/ix` is the one to work in.
+      '';
+      reason = ''
+        2026-08-03: the two trees had diverged in both directions and nobody
+        knew. 39 files differed, three paths existed only in the public repo
+        and four only in ix, and 100 pull requests were open against the
+        public one while the publisher that was meant to make it a projection
+        had failed every run since it was added, 37 failures and zero
+        successes. The differing set included this file, so which rules a
+        session loaded depended on which tree it came from. ENG-12167.
+      '';
+    };
+  }
+  {
     promptSource = {
       text = ''
         These rules live at `index/packages/agent-prompt/rules.nix` in the ix
-        repo. Edit them there; rendered copies are overwritten. The public
-        `indexable-inc/index` repository is a read-only projection of
-        `ix:index/`, so editing its copy of this file looks like it worked
-        and is erased by the next publish.
+        repo. Edit them there; rendered copies are overwritten, so editing
+        one looks like it worked and is erased by the next build.
       '';
       reason = ''
         Agents edited rendered copies that the next build overwrote. Restated
@@ -439,6 +463,38 @@
         of those produced a clean, plausible number. What separates them from
         a real result is whether the output says what it read, which costs
         one `echo`.
+      '';
+    };
+  }
+  {
+    statedInvariants = {
+      topics = ["verification"];
+      text = ''
+        A stated invariant holds only while the mechanism that maintains it
+        runs, so check that mechanism's last success rather than its
+        existence. A mirror is a projection only while its publisher lands, a
+        gitlink matches upstream only while the bumper runs, and a generated
+        file matches its source only while the diff that compares them is
+        required rather than merely present. Read this from the producer,
+        because a maintainer job that fails is invisible from the consuming
+        side by construction: the consumer sees a successful fetch of an old
+        revision and nothing else. Then say how stale the thing is in units
+        the reader can act on, naming the last success and what has landed
+        since.
+      '';
+      reason = ''
+        2026-08-03: this file says `indexable-inc/index` is a read-only
+        projection of `ix:index/`, and it has never been one. The publisher
+        that would make it so was added 2026-07-30 and has failed every run
+        since, 37 failures and zero successes, because
+        `vars.MIRROR_APP_CLIENT_ID` resolves to nothing and the step has no
+        fallback. Both copies went on taking changes: 39 files differ, three
+        paths exist only in the public repo and four only in ix, and the
+        differing set includes this file, so which rules a session loads
+        depended on which tree it came from. The only signal a consumer ever
+        got was `nix flake update index` returning the same revision twenty
+        minutes after the option being looked for had merged. ENG-12166,
+        ENG-12167.
       '';
     };
   }
