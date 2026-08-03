@@ -235,8 +235,15 @@
   is a single VM, so this is the seam `default.ix` configs call). A thin
   one-node wrapper over the same evaluator `mkFleet` uses -- the result
   keeps the exact shape tooling already consumes (`nixosConfigurations.<name>`,
-  `planValue`, the lifecycle wrappers), so a flake exposes it as
-  `ix.default` and inherits `nixosConfigurations` from it.
+  `planValue`, the lifecycle wrappers), so a flake inherits
+  `nixosConfigurations` from it and a bare `ix apply` converges those nodes.
+
+  The result is NOT a NixOS configuration and must not be bound to a flake's
+  `ix.default`: that output is the single-VM seam `ix init` scaffolds, and
+  `ix apply` builds `ix.default.config.system.build.toplevel` from it. A fleet
+  result has no `config`, so the binding fails the apply on a missing
+  attribute. Bind `(mkVm { ... }).nixosConfigurations.<name>` if you want the
+  single-VM path; `tests/ix-default-is-a-vm.nix` refuses the other spelling.
 
   Arguments:
   - `modules`: list of NixOS modules defining the VM.

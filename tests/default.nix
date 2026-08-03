@@ -7269,6 +7269,19 @@
   devProfilesRustTest = import ./dev-profiles-rust.nix {
     inherit lib pkgs ix paths;
   };
+
+  # Guard for every in-tree flake's `ix.default`: it has to be a NixOS
+  # configuration, not the fleet result `mkVm`/`mkDev`/`mkFleet` return.
+  # Eval-only; forced by the `eval` aggregate below.
+  ixDefaultIsAVmTest = import ./ix-default-is-a-vm.nix {
+    inherit
+      lib
+      nixpkgs
+      pkgs
+      ix
+      paths
+      ;
+  };
 in {
   inherit
     groupTests
@@ -7301,6 +7314,7 @@ in {
       cargoUnitPrebuiltTest
       devProfileFortifyTest.wiringReachesUnits
       devProfilesRustTest
+      ixDefaultIsAVmTest
     ]
   );
 }
