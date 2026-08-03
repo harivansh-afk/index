@@ -10,7 +10,6 @@
 # the one credential the environment expects to find at runtime.
 {
   ix,
-  lib,
   pkgs,
   ...
 }: let
@@ -28,42 +27,6 @@
   # ./default.ix). Only the path is known at eval time; the bytes arrive when
   # the VM is created and never enter the store.
   tokenPath = "/run/secrets/github/token";
-
-  # Answers git's `get` for github.com from `tokenPath`. Lifted from
-  # examples/synced-github/auth, which documents the design in full; the
-  # properties that matter are that the token never enters the environment or
-  # the store, an absent file falls through with exit 0 so boot and anonymous
-  # git never depend on delivery, and the host is re-checked on stdin so the
-  # token cannot be handed to another forge.
-  #
-  # `gh` also installs a helper for this host (his home module leaves
-  # `programs.gh.gitCredentialHelper` on). Helpers are additive and consulted
-  # in order, so this system-level one answers whenever `gh` itself has not
-  # been logged in -- which is the whole point of a VM that is reachable the
-  # moment it boots.
-  #
-  # Kept as raw bash, matching the source example: it is invoked per git
-  # operation, is builtins-only with no PATH requirement, and its control flow
-  # is built on intentional `|| exit 0` fall-throughs that `set -e` would break.
-  # astlog-ignore: no-write-shell-script
-  credentialHelper = pkgs.writeShellScript "github-token-credential-helper" ''
-    [ "$1" = get ] || exit 0
-    [ -r ${lib.escapeShellArg tokenPath} ] || exit 0
-
-    proto= host=
-    while IFS='=' read -r key value || [ -n "$key" ]; do
-      case "$key" in
-        protocol) proto=$value ;;
-        host) host=$value ;;
-      esac
-    done
-    [ "$proto" = https ] && [ "$host" = github.com ] || exit 0
-
-    token=$(<${lib.escapeShellArg tokenPath})
-    [ -n "$token" ] || exit 0
-    printf 'username=x-access-token\n'
-    printf 'password=%s\n' "$token"
-  '';
 in {
   users.users.${username} = {
     isNormalUser = true;
@@ -119,13 +82,13 @@ in {
   # eval-checks a future service that claims a port inside that range.
   programs.mosh.enable = true;
 
-  # System-level git config. Helpers are additive across scopes, so his own
-  # ~/.config/git/config (from the home module) adds to this rather than
-  # replacing it.
-  environment.etc.gitconfig.text = ''
-    [credential "https://github.com"]
-    	helper = ${credentialHelper}
-  '';
+  # Answers git's `get` for github.com from `tokenPath`, so a fetch or push
+  # from this VM authenticates with no key push and no `gh auth login`.
+  # Helpers are additive across scopes, so his own ~/.config/git/config (from
+  # the home module, which leaves `programs.gh.gitCredentialHelper` on) adds
+  # to this rather than replacing it, and this one answers whenever `gh`
+  # itself has not been logged in.
+  programs.git-token-auth.tokenFile = tokenPath;
 
   ix.networking = {
     expose = {
