@@ -320,7 +320,7 @@ defmodule IxMcp.ActionLogTest do
     assert [%{status: "done", stack: nil, line: nil} | _] = ActionLog.recent(10, log)
 
     # The 2 -> ... -> 8 steps stamped the file on their way through (index#3539).
-    assert user_version(path) == 9
+    assert user_version(path) == 10
   end
 
   test "a v1 database migrates losslessly to the normalized schema, once" do
@@ -404,7 +404,7 @@ defmodule IxMcp.ActionLogTest do
     stop_supervised!(:migrate)
 
     # The ladder ran 1 -> 2 -> ... -> 8 and left the stamp behind (index#3539).
-    assert user_version(path) == 9
+    assert user_version(path) == 10
 
     # The migrated file is the v2 shape on disk: normalized columns, no v1
     # leftovers, and a reopen (no-op detection) does not duplicate rows.
@@ -475,7 +475,7 @@ defmodule IxMcp.ActionLogTest do
   test "a fresh database is created stamped with the current schema version" do
     path = tmp_db()
     start_supervised!({ActionLog, path: path, name: :action_log_fresh_stamp})
-    assert user_version(path) == 9
+    assert user_version(path) == 10
   end
 
   test "an unstamped file already at the current schema is stamped, not rewritten" do
@@ -500,7 +500,7 @@ defmodule IxMcp.ActionLogTest do
 
     reopened = start_supervised!({ActionLog, path: path, name: :action_log_stamp_b})
     assert [%{intent: "keep"}] = ActionLog.recent(10, reopened)
-    assert user_version(path) == 9
+    assert user_version(path) == 10
   end
 
   test "an unstamped pre-line file (the #3536 shape) sniffs as v3 and gains the line column" do
@@ -525,7 +525,7 @@ defmodule IxMcp.ActionLogTest do
     log = start_supervised!({ActionLog, path: path, name: :action_log_pre_line})
 
     assert [%{intent: "pre-line row", status: "done", line: nil}] = ActionLog.recent(10, log)
-    assert user_version(path) == 9
+    assert user_version(path) == 10
   end
 
   test "the guarded update arbitrates issue claims on the request bus (#3880, #3883)" do
@@ -732,7 +732,7 @@ defmodule IxMcp.ActionLogTest do
     assert ActionLog.fleet_alert_new?("fp-1", "oom_burst", "first sighting", log)
     refute ActionLog.fleet_alert_new?("fp-1", "oom_burst", "first sighting", log)
 
-    assert user_version(path) == 9
+    assert user_version(path) == 10
   end
 
   test "a v7 database folds its issue claims into requests and drops the table (#3883)" do
@@ -785,7 +785,7 @@ defmodule IxMcp.ActionLogTest do
     assert ActionLog.request_events_after(0, log) == []
 
     # The old table is gone and the stamp moved.
-    assert user_version(path) == 9
+    assert user_version(path) == 10
 
     {:ok, conn} = Sqlite3.open(path)
 
@@ -859,7 +859,7 @@ defmodule IxMcp.ActionLogTest do
 
     # The refusal names both versions, so the operator knows which side moves.
     assert output =~ "user_version 9000"
-    assert output =~ "supported 9"
+    assert output =~ "supported 10"
     assert output =~ "index#3539"
 
     # The server stays useful: writes are absorbed, reads answer empty.

@@ -61,7 +61,7 @@ defmodule IxMcp.ActionLog do
   # The schema is a published contract (#3532): the action-log UI is built
   # against these exact tables, so changes here must be coordinated.
   @create_sessions """
-  CREATE TABLE sessions (id INTEGER PRIMARY KEY, name TEXT, started_at TEXT NOT NULL, last_seen_at TEXT)
+  CREATE TABLE sessions (id INTEGER PRIMARY KEY, name TEXT, started_at TEXT NOT NULL, last_seen_at TEXT, parent_session INTEGER REFERENCES sessions(id), spawn_tag TEXT)
   """
 
   @create_topics """
@@ -158,8 +158,9 @@ defmodule IxMcp.ActionLog do
   # 4 = the #3546 live cell line, 5 = the #3839 durable job ledger,
   # 6 = the #3880 issue-claim arbiter, 7 = the #3881 session heartbeat and
   # message bus, 8 = the #3883 request bus (issue_claims folded in and
-  # dropped), 9 = the ENG-11209 fleet notification state.
-  @user_version 9
+  # dropped), 9 = the ENG-11209 fleet notification state, 10 = the
+  # ENG-12004 child-session registry (parent_session + spawn_tag).
+  @user_version 10
 
   # How long a statement waits for a sibling instance's write lock before
   # step!/fetch/execute! give up and crash with a diagnosis (#3890). A
@@ -307,6 +308,15 @@ defmodule IxMcp.ActionLog do
   # poll after the upgrade.
   @migrate_v8_to_v9 [@create_fleet_mutes, @create_fleet_alerts_seen]
 
+  # A v9 database predates the child-session registry (ENG-12004):
+  # `parent_session` marks a row as a lead's subagent (NULL = a peer), and
+  # `spawn_tag` lets the wrapper that spawned this kernel's whole process
+  # tree find its own session row from outside the BEAM.
+  @migrate_v9_to_v10 [
+    "ALTER TABLE sessions ADD COLUMN parent_session INTEGER REFERENCES sessions(id)",
+    "ALTER TABLE sessions ADD COLUMN spawn_tag TEXT"
+  ]
+
   # Ordered migrations keyed by the user_version each upgrades FROM. Every
   # step runs in one immediate transaction that also stamps the version it
   # produces, so an interrupted migration leaves the previous consistent,
@@ -319,7 +329,8 @@ defmodule IxMcp.ActionLog do
     {5, @migrate_v5_to_v6},
     {6, @migrate_v6_to_v7},
     {7, @migrate_v7_to_v8},
-    {8, @migrate_v8_to_v9}
+    {8, @migrate_v8_to_v9},
+    {9, @migrate_v9_to_v10}
   ]
 
   @insert """
@@ -376,7 +387,7 @@ defmodule IxMcp.ActionLog do
   @select_directory """
   SELECT s.id, s.name,
          (SELECT t.name FROM topics t WHERE t.session_id = s.id ORDER BY t.id DESC LIMIT 1),
-         s.started_at, s.last_seen_at
+         s.started_at, s.last_seen_at, s.parent_session, s.spawn_tag
   FROM sessions s ORDER BY s.id
   """
 
@@ -480,14 +491,19 @@ defmodule IxMcp.ActionLog do
   @typedoc """
   A session-directory row (#3881): `topic` is the session's latest topics
   row, `last_seen_at` its heartbeat (nil = it never heartbeat: a pre-#3881
-  row or an instance that never ran the watch).
+  row or an instance that never ran the watch). `parent` set means the row
+  is a lead's subagent, not a peer (ENG-12004); `spawn_tag` is the marker
+  the spawning wrapper passed through `IX_MCP_SPAWN_TAG`, so a process
+  outside the BEAM can find the session it caused.
   """
   @type directory_entry :: %{
           id: integer(),
           name: String.t() | nil,
           topic: String.t() | nil,
           started_at: String.t(),
-          last_seen_at: String.t() | nil
+          last_seen_at: String.t() | nil,
+          parent: integer() | nil,
+          spawn_tag: String.t() | nil
         }
 
   @typedoc """
@@ -512,10 +528,19 @@ defmodule IxMcp.ActionLog do
     GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
   end
 
-  @doc "Insert a sessions row (name may be nil); returns its id."
-  @spec create_session(String.t() | nil, GenServer.server()) :: integer()
-  def create_session(name, server \\ __MODULE__) do
-    call(server, {:create_session, name, now()})
+  @doc """
+  Insert a sessions row (name may be nil); returns its id.
+
+  Options: `:parent` records the row as a subagent of that session
+  (ENG-12004), `:spawn_tag` the marker an outside spawner passed so it can
+  find this row again. Both default nil, which is an ordinary peer.
+  """
+  @spec create_session(String.t() | nil, GenServer.server(), keyword()) :: integer()
+  def create_session(name, server \\ __MODULE__, opts \\ []) do
+    call(
+      server,
+      {:create_session, name, Keyword.get(opts, :parent), Keyword.get(opts, :spawn_tag), now()}
+    )
   end
 
   @doc "Set an existing session row's name."
@@ -1024,8 +1049,13 @@ defmodule IxMcp.ActionLog do
     {:reply, disabled_reply(request), :disabled}
   end
 
-  def handle_call({:create_session, name, at}, _from, %{db: db} = state) do
-    run(db, "INSERT INTO sessions (name, started_at) VALUES (?, ?)", [name, at])
+  def handle_call({:create_session, name, parent, spawn_tag, at}, _from, %{db: db} = state) do
+    run(
+      db,
+      "INSERT INTO sessions (name, started_at, parent_session, spawn_tag) VALUES (?, ?, ?, ?)",
+      [name, at, parent, spawn_tag]
+    )
+
     {:ok, id} = Sqlite3.last_insert_rowid(db.conn)
     {:reply, id, state}
   end
@@ -1448,8 +1478,17 @@ defmodule IxMcp.ActionLog do
 
   def handle_call(:session_directory, _from, %{db: db} = state) do
     entries =
-      for [id, name, topic, started_at, last_seen_at] <- fetch(db, @select_directory, []) do
-        %{id: id, name: name, topic: topic, started_at: started_at, last_seen_at: last_seen_at}
+      for [id, name, topic, started_at, last_seen_at, parent, spawn_tag] <-
+            fetch(db, @select_directory, []) do
+        %{
+          id: id,
+          name: name,
+          topic: topic,
+          started_at: started_at,
+          last_seen_at: last_seen_at,
+          parent: parent,
+          spawn_tag: spawn_tag
+        }
       end
 
     {:reply, entries, state}
@@ -1634,7 +1673,7 @@ defmodule IxMcp.ActionLog do
 
   defp stamp(version \\ @user_version), do: "PRAGMA user_version = #{version}"
 
-  defp disabled_reply({:create_session, _name, _at}), do: 0
+  defp disabled_reply({:create_session, _name, _parent, _tag, _at}), do: 0
   defp disabled_reply({:create_topic, _session_id, _name, _at}), do: 0
   defp disabled_reply({:start_action, _action}), do: 0
 

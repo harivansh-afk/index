@@ -28,7 +28,9 @@ defmodule IxMcp.Agents do
 
   import Kernel, except: [send: 2, spawn: 1]
 
+  alias IxMcp.ActionLog
   alias IxMcp.Agents.Events
+  alias IxMcp.Session
 
   @harness IxMcp.Agents.Harness
 
@@ -69,12 +71,37 @@ defmodule IxMcp.Agents do
 
     case AgentHarness.create_subagent(@harness, brief, opts) do
       {:ok, id} ->
-        Events.register_spawn(id, %{backend: backend, model: model, brief: brief})
+        Events.register_spawn(id, %{
+          backend: backend,
+          model: model,
+          brief: brief,
+          child_session: register_child_session(id, opts)
+        })
+
         {:ok, id}
 
       {:error, _reason} = error ->
         error
     end
+  end
+
+  # The child's row in the host session directory, so a process outside
+  # this BEAM (claude-html) can see the lead's subagents at all
+  # (ENG-12004). Registration is strictly best-effort: the ledger note in
+  # `Events` holds for the mirror too -- losing it must never cost the
+  # child, so a dead or degraded ActionLog yields nil and the spawn
+  # proceeds unlisted.
+  @spec register_child_session(id(), keyword()) :: integer() | nil
+  defp register_child_session(id, opts) do
+    parent = Session.ids().session_id
+
+    row =
+      ActionLog.create_session(Keyword.get(opts, :name) || id, ActionLog, parent: parent)
+
+    # 0 is the disabled log's reply, not a row.
+    if row > 0, do: row
+  catch
+    :exit, _ -> nil
   end
 
   @doc """

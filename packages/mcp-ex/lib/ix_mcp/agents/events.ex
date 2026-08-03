@@ -13,10 +13,18 @@ defmodule IxMcp.Agents.Events do
 
   use GenServer
 
+  alias IxMcp.ActionLog
   alias IxMcp.MCP.Notifier
 
   @events_cap 200
   @notify_result_cap 2_000
+
+  # How often a working child's directory row is re-stamped. Events arrive
+  # per parsed stream line, far too often to write SQLite each time; 5s
+  # keeps the row comfortably inside the directory's 30s liveness window
+  # (`IxMcp.Sessions` @fresh_within_s) at a fifth of the writes a
+  # per-tick stamp would cost.
+  @beat_every_ms 5_000
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
@@ -61,11 +69,13 @@ defmodule IxMcp.Agents.Events do
   def init(opts) do
     state = %{
       harness: Keyword.fetch!(opts, :harness),
+      action_log: Keyword.get(opts, :action_log, ActionLog),
       meta: %{},
       events: %{},
       sessions: %{},
       finals: %{},
-      waiters: %{}
+      waiters: %{},
+      beats: %{}
     }
 
     {:ok, state, {:continue, :drain}}
@@ -93,13 +103,15 @@ defmodule IxMcp.Agents.Events do
 
   @impl true
   def handle_cast({:register, id, meta}, state) do
-    {:noreply, %{state | meta: Map.put(state.meta, id, meta)}}
+    # Stamped at registration so the child's dot exists from the spawn,
+    # not from its first output line.
+    {:noreply, beat(%{state | meta: Map.put(state.meta, id, meta)}, id)}
   end
 
   def handle_cast({:record, id, kind, data}, state) do
     event = Map.merge(data, %{kind: kind, at_ms: System.system_time(:millisecond)})
     events = Map.update(state.events, id, [event], &Enum.take([event | &1], @events_cap))
-    {:noreply, %{state | events: events}}
+    {:noreply, beat(%{state | events: events}, id)}
   end
 
   def handle_cast({:session, id, ref}, state) do
@@ -185,6 +197,28 @@ defmodule IxMcp.Agents.Events do
     )
 
     state
+  end
+
+  # Re-stamp the child's session-directory heartbeat (ENG-12004), rate
+  # limited to @beat_every_ms. A finished child stops producing events, so
+  # its row goes stale and its dot dies inside the directory's 30s window
+  # with no terminal write needed. Best-effort like the registration:
+  # readers lose a heartbeat, the child loses nothing.
+  defp beat(state, id) do
+    now = System.system_time(:millisecond)
+
+    with %{child_session: session} when is_integer(session) <- Map.get(state.meta, id),
+         last when now - last >= @beat_every_ms <- Map.get(state.beats, id, 0) do
+      try do
+        ActionLog.heartbeat_session(session, state.action_log)
+      catch
+        :exit, _ -> :ok
+      end
+
+      %{state | beats: Map.put(state.beats, id, now)}
+    else
+      _ -> state
+    end
   end
 
   defp inspect_text(reason) when is_binary(reason), do: reason
