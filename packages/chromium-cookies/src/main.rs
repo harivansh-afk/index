@@ -90,19 +90,22 @@ fn extract(app: &str, format: Format, domain: Option<&str>) -> Result<()> {
 fn netscape(cookies: &[Cookie]) -> String {
     let mut out = String::from("# Netscape HTTP Cookie File\n");
     for c in cookies {
-        let expires = if c.expires_utc == 0 {
-            0
-        } else {
-            c.expires_utc / 1_000_000 - CHROMIUM_TO_UNIX_SECS
-        };
-        let subdomains = if c.host.starts_with('.') { "TRUE" } else { "FALSE" };
-        let secure = if c.secure { "TRUE" } else { "FALSE" };
         // Infallible: writing to a String never errors.
-        let _ = writeln!(
-            out,
-            "{}\t{subdomains}\t{}\t{secure}\t{expires}\t{}\t{}",
-            c.host, c.path, c.name, c.value
-        );
+        let _ = writeln!(out, "{}", netscape_line(c));
     }
     out
+}
+
+fn netscape_line(c: &Cookie) -> String {
+    let expires = if c.expires_utc == 0 {
+        0
+    } else {
+        c.expires_utc / 1_000_000 - CHROMIUM_TO_UNIX_SECS
+    };
+    let subdomains = if c.host.starts_with('.') { "TRUE" } else { "FALSE" };
+    let secure = if c.secure { "TRUE" } else { "FALSE" };
+    format!(
+        "{}\t{subdomains}\t{}\t{secure}\t{expires}\t{}\t{}",
+        c.host, c.path, c.name, c.value
+    )
 }

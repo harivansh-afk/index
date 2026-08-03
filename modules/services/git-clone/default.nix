@@ -81,22 +81,27 @@ in {
   config = mkIf cfg.enable {
     environment.systemPackages = [pkgs.gitoxide];
 
-    # A VM holding a checkout wants git, and the config below needs somewhere
-    # to land. mkDefault so a consumer can still turn it off.
-    programs.git.enable = lib.mkDefault true;
+    programs = {
+      git = {
+        # A VM holding a checkout wants git, and the config below needs
+        # somewhere to land. mkDefault so a consumer can still turn it off.
+        enable = lib.mkDefault true;
 
-    # The clone runs as root and whoever shells in later is not necessarily
-    # root; without this git refuses the tree as dubiously owned, which reads
-    # as a repository problem rather than an ownership one.
-    programs.git.config.safe.directory = cfg.dest;
+        # The clone runs as root and whoever shells in later is not
+        # necessarily root; without this git refuses the tree as dubiously
+        # owned, which reads as a repository problem rather than an ownership
+        # one.
+        config.safe.directory = cfg.dest;
+      };
 
-    # Authenticating the clone and authenticating the checkout afterwards are
-    # the same credential, so this sets the general option rather than
-    # carrying a private copy of the wiring. `hosts` is a list, so a consumer
-    # naming a second forge adds to this rather than replacing it.
-    programs.git-token-auth = mkIf (cfg.tokenFile != null) {
-      inherit (cfg) tokenFile;
-      hosts = [cloneHost];
+      # Authenticating the clone and authenticating the checkout afterwards are
+      # the same credential, so this sets the general option rather than
+      # carrying a private copy of the wiring. `hosts` is a list, so a consumer
+      # naming a second forge adds to this rather than replacing it.
+      git-token-auth = mkIf (cfg.tokenFile != null) {
+        inherit (cfg) tokenFile;
+        hosts = [cloneHost];
+      };
     };
 
     systemd.services.git-clone = {

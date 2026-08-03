@@ -6713,6 +6713,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "loom-launch"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "nix 0.31.3",
+]
+
+[[package]]
 name = "loro"
 version = "1.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"

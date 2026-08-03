@@ -39,8 +39,11 @@ async function pollUntil(check, { timeoutMs = 2000, stepMs = 10 } = {}) {
 const occurrence = (symbol, role = "definition") => ({
   symbol,
   path: `src/${symbol}.rs`,
-  start: 1n,
-  end: 4n,
+  // Numbers, not 1n/4n: `start`/`end` are i64, which this binding maps to
+  // JS number by contract (the "a bigint where a number is declared is
+  // refused" test below proves the refusal side of the same contract).
+  start: 1,
+  end: 4,
   occurrenceRole: role,
 });
 
@@ -274,8 +277,8 @@ test("errors decode to the generated classes with the variant code", () => {
   );
   assert.throws(() => api.failWith("query"), api.BadQuery);
   assert.throws(() => api.failWith("anything"), api.OutOfRange);
-  assert.equal(api.checkedAdd(2n, 3n), 5n);
-  assert.throws(() => api.checkedAdd(900n, 200n), api.OutOfRange);
+  assert.equal(api.checkedAdd(2, 3), 5);
+  assert.throws(() => api.checkedAdd(900, 200), api.OutOfRange);
 });
 
 test("sync functions substitute omitted defaults", () => {
@@ -287,10 +290,10 @@ test("sync functions substitute omitted defaults", () => {
 });
 
 test("async functions resolve as real promises and decode rejections", async () => {
-  const pending = api.sleepEcho("hi", 10n);
+  const pending = api.sleepEcho("hi", 10);
   assert.ok(pending instanceof Promise, "async exports return a Promise");
   assert.equal(await pending, "hi");
-  await assert.rejects(api.sleepFail(1n), (error) => {
+  await assert.rejects(api.sleepFail(1), (error) => {
     assert.ok(error instanceof api.BadQuery);
     assert.equal(error.code, "BadQuery");
     return true;
@@ -320,14 +323,14 @@ async function assertAbortsMidFlight(start) {
 }
 
 test("abort mid-flight rejects promptly and drops the Rust future", async () => {
-  await assertAbortsMidFlight((signal) => api.sleepEcho("never", 500n, signal));
+  await assertAbortsMidFlight((signal) => api.sleepEcho("never", 500, signal));
 });
 
 test("an already-aborted signal rejects before the future starts", async () => {
   const baseline = api.droppedMidFlightCount();
   const controller = new AbortController();
   controller.abort();
-  await assert.rejects(api.sleepEcho("never", 500n, controller.signal), (error) => {
+  await assert.rejects(api.sleepEcho("never", 500, controller.signal), (error) => {
     assert.equal(error.name, "AbortError");
     return true;
   });
@@ -339,19 +342,19 @@ test("an already-aborted signal rejects before the future starts", async () => {
 
 test("streams collect through for-await", async () => {
   const items = [];
-  for await (const item of api.countStream(5n)) {
+  for await (const item of api.countStream(5)) {
     items.push(item);
   }
-  assert.deepEqual(items, [0n, 1n, 2n, 3n, 4n]);
+  assert.deepEqual(items, [0, 1, 2, 3, 4]);
 });
 
 test("an async stream function resolves to an iterable stream", async () => {
-  const stream = await api.countStreamLater(3n);
+  const stream = await api.countStreamLater(3);
   const items = [];
   for await (const item of stream) {
     items.push(item);
   }
-  assert.deepEqual(items, [0n, 1n, 2n]);
+  assert.deepEqual(items, [0, 1, 2]);
 });
 
 // The bounded(2) pull, whatever opened the stream: the producer runs at
@@ -361,14 +364,14 @@ test("an async stream function resolves to an iterable stream", async () => {
 async function assertBoundedPull({ open, produced, item, total }) {
   const baseline = produced();
   const stream = open();
-  let consumed = 0n;
+  let consumed = 0;
   for (let pull = 0; pull < 3; pull += 1) {
     assert.equal(await stream.next(), item(consumed));
-    consumed += 1n;
+    consumed += 1;
     await sleep(50); // an unthrottled producer would run far ahead here
     const ahead = produced() - baseline;
     assert.ok(
-      ahead <= consumed + 3n,
+      ahead <= consumed + 3,
       `producer pushed ${ahead} with only ${consumed} consumed; bounded(2) should cap it`,
     );
   }
@@ -383,26 +386,26 @@ async function assertBoundedPull({ open, produced, item, total }) {
 
 test("streams exert backpressure through the bounded(2) channel", async () => {
   await assertBoundedPull({
-    open: () => api.countStream(20n),
+    open: () => api.countStream(20),
     produced: () => api.streamItemsProduced(),
     item: (index) => index,
-    total: 20n,
+    total: 20,
   });
 });
 
 test("early break from for-await closes the stream", async () => {
   const baseline = api.streamItemsProduced();
   const collected = [];
-  for await (const item of api.countStream(50n)) {
+  for await (const item of api.countStream(50)) {
     collected.push(item);
     if (collected.length === 2) break;
   }
-  assert.deepEqual(collected, [0n, 1n]);
+  assert.deepEqual(collected, [0, 1]);
   await sleep(100);
   const settled = api.streamItemsProduced() - baseline;
   await sleep(100);
   assert.equal(api.streamItemsProduced() - baseline, settled, "producer survived the break");
-  assert.ok(settled < 50n, `producer pushed all ${settled} items despite the break`);
+  assert.ok(settled < 50, `producer pushed all ${settled} items despite the break`);
 });
 
 test("objects construct, expose methods, and close idempotently", async () => {
@@ -410,21 +413,25 @@ test("objects construct, expose methods, and close idempotently", async () => {
   const liveBaseline = api.liveSessions();
   const closedBaseline = api.closedSessions();
   const session = new api.Session("alpha");
-  assert.equal(api.liveSessions(), liveBaseline + 1n);
+  assert.equal(api.liveSessions(), liveBaseline + 1);
   assert.equal(session.name(), "alpha");
   assert.equal(session.isOpen(), true);
   assert.equal(await session.query("ping"), "alpha: ping");
   await session.close();
-  assert.equal(api.closedSessions(), closedBaseline + 1n, "close ran the Rust close");
+  assert.equal(api.closedSessions(), closedBaseline + 1, "close ran the Rust close");
   assert.equal(session.isOpen(), false, "methods still answer after close");
   await session.close();
-  assert.equal(api.closedSessions(), closedBaseline + 1n, "second close is a no-op");
+  assert.equal(api.closedSessions(), closedBaseline + 1, "second close is a no-op");
 });
 
 test("objects also arrive from plain function returns", async () => {
   const baseline = api.liveSessions();
   const session = api.openSession("beta");
-  assert.equal(api.liveSessions(), baseline + 1n);
+  // A plain number, not 1n: the counters are declared i64, which this
+  // binding maps to JS number by contract (see "a bigint where a number is
+  // declared is refused rather than coerced"). `+ 1n` on a number baseline
+  // throws before the assertion can run.
+  assert.equal(api.liveSessions(), baseline + 1);
   assert.equal(await session.query("hi"), "beta: hi");
   await session.close();
 });
@@ -432,7 +439,7 @@ test("objects also arrive from plain function returns", async () => {
 test("a stream method iterates, and its items carry the receiver's state", async () => {
   const session = api.openSession("streamy");
   const items = [];
-  for await (const item of session.events(4n)) {
+  for await (const item of session.events(4)) {
     items.push(item);
   }
   assert.deepEqual(items, ["streamy:0", "streamy:1", "streamy:2", "streamy:3"]);
@@ -442,10 +449,10 @@ test("a stream method iterates, and its items carry the receiver's state", async
 test("a stream method exerts backpressure and stops at close()", async () => {
   const session = api.openSession("bounded");
   await assertBoundedPull({
-    open: () => session.events(20n),
+    open: () => session.events(20),
     produced: () => api.sessionEventsProduced(),
     item: (index) => `bounded:${index}`,
-    total: 20n,
+    total: 20,
   });
   await session.close();
 });
@@ -470,34 +477,39 @@ test("a throwing stream method fails before any stream exists", async () => {
 
 test("aborting an async stream method rejects and drops the Rust future", async () => {
   const session = api.openSession("abortable");
-  await assertAbortsMidFlight((signal) => session.eventsLater(3n, 500n, signal));
+  await assertAbortsMidFlight((signal) => session.eventsLater(3, 500, signal));
   const items = [];
-  for await (const item of await session.eventsLater(3n, 1n)) {
+  for await (const item of await session.eventsLater(3, 1)) {
     items.push(item);
   }
-  assert.deepEqual(items, [0n, 1n, 2n], "the same method still streams when it is not aborted");
+  assert.deepEqual(items, [0, 1, 2], "the same method still streams when it is not aborted");
   await session.close();
 });
 
-test("a stream method yields records whose 64-bit fields cross as bigint", async () => {
+test("a stream method yields records whose 64-bit fields cross as checked numbers", async () => {
   const session = api.openSession("ledger");
-  const start = 2n ** 62n;
+  // Inside the double-exact range: an inbound value past 2^53 - 1 is
+  // refused by the integer policy ("not a safe integer"), so the wide
+  // inbound of the old bigint contract is not a scenario anymore.
+  const start = 2 ** 52;
   const rows = [];
-  for await (const row of session.ledgers(start, 2n)) {
+  for await (const row of session.ledgers(start, 2)) {
     rows.push(row);
   }
   assert.equal(rows.length, 2);
-  // The owner-scoped stream class and the record's generated mirror have to
-  // compose: every wide field arrives as an exact bigint, past 2^53.
+  // The owner-scoped stream class and the record's generated mirror have
+  // to compose: every field arrives as a plain number.
   assert.deepEqual(
     rows.map((row) => row.balance),
-    [start, start + 1n],
+    [start, start + 1],
   );
-  assert.equal(rows[0].sequence, 2n ** 64n - 1n, "u64::MAX survived the stream element");
-  assert.deepEqual(rows[1].entries, 1n, "usize crosses as bigint inside a streamed record");
-  assert.deepEqual(rows[1].deltas, [1n], "a Vec<i64> field inside a streamed record");
+  // Outbound values past 2^53 round exactly as they would in any JSON
+  // API; u64::MAX rounds to the nearest double, same as `u64Max()` above.
+  assert.equal(rows[0].sequence, Number(2n ** 64n - 1n), "u64::MAX rounds across the stream element");
+  assert.deepEqual(rows[1].entries, 1, "usize crosses as a number inside a streamed record");
+  assert.deepEqual(rows[1].deltas, [1], "a Vec<i64> field inside a streamed record");
   assert.equal(rows[0].ceiling, start, "an Option<i64> field inside a streamed record");
-  assert.deepEqual(rows[0].totals, { ledger: 2n ** 64n - 1n }, "a u64-valued map field");
+  assert.deepEqual(rows[0].totals, { ledger: Number(2n ** 64n - 1n) }, "a u64-valued map field");
   await session.close();
 });
 
@@ -545,7 +557,7 @@ test("an async fallible method hands back the wrapper class, not a native handle
   assert.equal(shell.isOpen(), true);
   await shell.close();
   assert.equal(shell.isOpen(), false);
-  assert.equal(api.closedShells(), closedBaseline + 1n, "the minted object's close never ran");
+  assert.equal(api.closedShells(), closedBaseline + 1, "the minted object's close never ran");
 
   // Instances only come from the method, exactly like Keys.
   assert.throws(() => new api.Shell(), TypeError);
@@ -564,7 +576,7 @@ test("a bytes stream method yields Buffers with every byte intact", async () => 
   const session = api.openSession("blobs");
   const shell = await session.openShell("cat");
   const chunks = [];
-  for await (const chunk of shell.output(3n)) {
+  for await (const chunk of shell.output(3)) {
     chunks.push(chunk);
   }
   assert.equal(chunks.length, 3);
@@ -594,7 +606,7 @@ test("await using disposes the session through its Rust close", async () => {
   }
   assert.equal(
     api.closedSessions(),
-    closedBaseline + 1n,
+    closedBaseline + 1,
     "asyncDispose did not run the Rust close",
   );
 });
@@ -610,7 +622,11 @@ test("drop without close: GC finalization drops the Rust value", async () => {
     const session = api.openSession("leaked");
     registry.register(session, "session");
   })();
-  assert.equal(api.liveSessions(), baseline + 1n);
+  // A plain number, not 1n: the counters are declared i64, which this
+  // binding maps to JS number by contract (see "a bigint where a number is
+  // declared is refused rather than coerced"). `+ 1n` on a number baseline
+  // throws before the assertion can run.
+  assert.equal(api.liveSessions(), baseline + 1);
   // The unclosed-resource drop also prints the generated leak warning to
   // stderr, which is exactly the surface being proven here.
   // `<=`: forcing GC here also sweeps earlier tests' closed-but-alive

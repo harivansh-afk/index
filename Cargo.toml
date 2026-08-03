@@ -38,6 +38,7 @@ members = [
   "packages/linear-file",
   "packages/ix-credential",
   "packages/claude-stories",
+  "packages/loom/launch",
   "packages/subagent-cache",
   "packages/submodule-sync-test",
   "packages/audio/app",

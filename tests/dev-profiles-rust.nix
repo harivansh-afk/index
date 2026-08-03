@@ -20,17 +20,16 @@
   ix,
   paths,
 }: let
-  configWithRust =
-    ix.evalImageConfig {
-      modules = [
-        (paths.root + "/lib/dev/options.nix")
-        (paths.root + "/lib/dev/profiles.nix")
-        {
-          ix.dev.profiles.rust.enable = true;
-          ix.image.name = "dev-profiles-rust-guard";
-        }
-      ];
-    };
+  configWithRust = ix.evalImageConfig {
+    modules = [
+      (paths.root + "/lib/dev/options.nix")
+      (paths.root + "/lib/dev/profiles.nix")
+      {
+        ix.dev.profiles.rust.enable = true;
+        ix.image.name = "dev-profiles-rust-guard";
+      }
+    ];
+  };
 
   packageNames = map (package: package.pname or package.name or "") configWithRust.environment.systemPackages;
 

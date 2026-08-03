@@ -28,15 +28,13 @@
 
   # An `insteadOf` pair per host, so an SSH-form remote reaches the same
   # token rather than needing a deploy key.
-  sshRewrites =
-    lib.listToAttrs (map (host:
-      lib.nameValuePair "url \"https://${host}/\"" {
-        insteadOf = [
-          "git@${host}:"
-          "ssh://git@${host}/"
-        ];
-      })
-    cfg.hosts);
+  sshRewrites = lib.genAttrs' cfg.hosts (host:
+    lib.nameValuePair "url \"https://${host}/\"" {
+      insteadOf = [
+        "git@${host}:"
+        "ssh://git@${host}/"
+      ];
+    });
 
   # A helper entry per host alongside the plain-scope one. Both, because the
   # two consumers disagree: git prefers the narrowest matching scope, and
@@ -44,9 +42,8 @@
   # helper re-checks the request's host itself, so the broad registration
   # still answers for `hosts` only.
   hostScopes =
-    lib.listToAttrs (map (host:
-      lib.nameValuePair "credential \"https://${host}\"" {inherit helper;})
-    cfg.hosts);
+    lib.genAttrs' cfg.hosts (host:
+      lib.nameValuePair "credential \"https://${host}\"" {inherit helper;});
 in {
   options.programs.git-token-auth = {
     tokenFile = mkOption {
@@ -108,18 +105,21 @@ in {
   };
 
   config = mkIf (cfg.tokenFile != null) {
-    programs.git-token-auth = {
-      helperCommand = helper;
-      preflight = "${tool} token-check --token-file ${cfg.tokenFile}";
+    programs = {
+      git-token-auth = {
+        helperCommand = helper;
+        preflight = "${tool} token-check --token-file ${cfg.tokenFile}";
+      };
+
+      # The credential config needs somewhere to land, and a host holding a
+      # checkout wants git anyway. mkDefault so a consumer can still say no.
+      git = {
+        enable = lib.mkDefault true;
+        config =
+          {credential.helper = helper;}
+          // hostScopes
+          // sshRewrites;
+      };
     };
-
-    # The credential config needs somewhere to land, and a host holding a
-    # checkout wants git anyway. mkDefault so a consumer can still say no.
-    programs.git.enable = lib.mkDefault true;
-
-    programs.git.config =
-      {credential.helper = helper;}
-      // hostScopes
-      // sshRewrites;
   };
 }
