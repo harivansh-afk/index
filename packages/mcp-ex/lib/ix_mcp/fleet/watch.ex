@@ -53,9 +53,9 @@ defmodule IxMcp.Fleet.Watch do
 
   use GenServer
 
+  alias FleetMesh.ClickHouse
   alias IxMcp.ActionLog
   alias IxMcp.Fleet.Alerts
-  alias IxMcp.Fleet.ClickHouse
   alias IxMcp.Fleet.Digest
   alias IxMcp.MCP.Notifier
 

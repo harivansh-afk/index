@@ -95,7 +95,7 @@ defmodule IxMcp.Fleet.Alerts do
   single predicate by id is the fine one, and lives in `IxMcp.Fleet.Watch`.
   """
 
-  alias IxMcp.Fleet.ClickHouse
+  alias FleetMesh.ClickHouse
 
   @typedoc """
   A fired condition. `fingerprint` identifies the condition *instance* and is

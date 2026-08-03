@@ -1,15 +1,15 @@
-defmodule IxMcp.Fleet.ClickHouse do
+defmodule FleetMesh.ClickHouse do
   @moduledoc """
   Read-only access to the fleet's ClickHouse, which is the only place fleet
   telemetry exists (hosts ship their journals there and keep nothing local).
 
   Transport is `ssh` to the cluster leader, not HTTP. Port 8123 is firewalled
   to the leader's vRack bond, so the machine this kernel runs on has no route
-  to it -- a direct `curl http://clickhouse.ix.internal:8123` fails to resolve
+  to it -- a direct HTTP query fails to resolve
   before it fails to connect. The leader can always reach its own ClickHouse,
   so the query runs there and only the rows come back. This also avoids adding
-  an HTTP client dependency: `mcp-ex` deliberately carries none (mix.exs), and
-  a fleet read is not worth changing that.
+  an HTTP client dependency: this library deliberately carries no
+  runtime deps, and a fleet read is not worth changing that.
 
   Every function distinguishes an empty answer from an unanswered question
   (ENG-11209). `{:ok, []}` means the fleet is quiet; `{:error, reason}` means
@@ -18,8 +18,6 @@ defmodule IxMcp.Fleet.ClickHouse do
   confusion is why `fleet.unit_health_latest.unhealthy` went unexamined for
   weeks while it was structurally incapable of firing (ENG-11211).
   """
-
-  @default_host "hil-compute-2"
 
   # ssh + query, generously. A leader under memory pressure answers slowly
   # rather than not at all, and a poll that gives up early reports "I could
@@ -31,12 +29,25 @@ defmodule IxMcp.Fleet.ClickHouse do
   @type row :: %{String.t() => term()}
 
   @doc """
-  The leader to query. `IX_CLICKHOUSE_HOST` overrides; it is an ssh
-  destination, so an alias from `~/.ssh/config` is as valid as a hostname.
-  Leadership moves, and when it does this is the one line to change.
+  The leader to query: `IX_CLICKHOUSE_HOST`, else
+  `config :fleet_mesh, :clickhouse_host`. An ssh destination, so an alias
+  from `~/.ssh/config` is as valid as a hostname.
+
+  No default on purpose: a host name is deployment fact, not mechanism, and
+  this package is publicly projected. Leadership moves, and when it does the
+  deploy config is the one line to change. Raises when nothing is
+  configured, at the first query, with the fix in the message.
   """
   @spec host() :: String.t()
-  def host, do: System.get_env("IX_CLICKHOUSE_HOST") || @default_host
+  def host do
+    System.get_env("IX_CLICKHOUSE_HOST") ||
+      Application.get_env(:fleet_mesh, :clickhouse_host) ||
+      raise(
+        "FleetMesh.ClickHouse: no host configured. Set IX_CLICKHOUSE_HOST " <>
+          "(an ssh destination) or `config :fleet_mesh, clickhouse_host: ...` " <>
+          "to the cluster leader."
+      )
+  end
 
   @doc """
   Run `sql` on the leader and decode `JSONEachRow` output.
