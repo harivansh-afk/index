@@ -11,6 +11,7 @@ use anstyle::{AnsiColor, Reset, Style};
 
 use crate::git::{self, HeadName};
 use crate::jj;
+use crate::views;
 
 /// nf-dev-git_branch, the symbol this prompt used for `git_branch`.
 const GIT_SYMBOL: &str = "\u{e0a0} ";
@@ -56,7 +57,7 @@ impl Segment {
 /// descends from, and the state flags. There is no separate dirty count: in jj
 /// the edits are already in @, so a non-empty working copy is the dirty
 /// signal.
-pub fn jj(head: &jj::Head, color: bool) -> String {
+pub fn jj(head: &jj::Head, view: Option<&views::View>, color: bool) -> String {
     let mut segment = Segment::new(color);
     segment.push_plain("on ");
     segment.push(NAME, JJ_SYMBOL);
@@ -84,6 +85,20 @@ pub fn jj(head: &jj::Head, color: bool) -> String {
     if !flags.is_empty() {
         segment.push_plain(" ");
         segment.push(COUNTS, &flags);
+    }
+
+    // The view the directory is inside: context the way the submodule
+    // breadcrumb is, so the name is muted, with the last survey's counts
+    // against the published repository beside it.
+    if let Some(view) = view {
+        segment.push_plain(" ");
+        segment.push(MUTED, &view.name);
+        if let Some(counts) = view.counts {
+            let arrows = ahead_behind(counts.ahead, counts.behind);
+            if !arrows.is_empty() {
+                segment.push(COUNTS, &arrows);
+            }
+        }
     }
 
     segment.into_text()
@@ -127,27 +142,28 @@ fn counts(counts: &git::Counts, tracking: Option<git::Tracking>) -> String {
     }
 
     if let Some(git::Tracking { ahead, behind }) = tracking {
-        match (ahead, behind) {
-            (0, 0) => {}
-            (ahead, 0) => {
-                let _ = write!(rendered, "⇡{ahead}");
-            }
-            (0, behind) => {
-                let _ = write!(rendered, "⇣{behind}");
-            }
-            (ahead, behind) => {
-                let _ = write!(rendered, "⇕⇡{ahead}⇣{behind}");
-            }
-        }
+        rendered.push_str(&ahead_behind(ahead, behind));
     }
 
     rendered
 }
 
+/// The ahead/behind arrows, shared by the git tracking counts and the jj
+/// view counts so the two read identically.
+fn ahead_behind(ahead: usize, behind: usize) -> String {
+    match (ahead, behind) {
+        (0, 0) => String::new(),
+        (ahead, 0) => format!("⇡{ahead}"),
+        (0, behind) => format!("⇣{behind}"),
+        (ahead, behind) => format!("⇕⇡{ahead}⇣{behind}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::git::{Counts, Head as GitHead, HeadName, Tracking};
+    use crate::git::{Counts as GitCounts, Head as GitHead, HeadName, Tracking};
     use crate::jj::{Bookmark, Flags, Head as JjHead};
+    use crate::views::{Counts, View};
 
     #[test]
     fn a_jj_working_copy_reads_change_bookmark_distance_then_flags() {
@@ -165,7 +181,7 @@ mod tests {
             }),
         };
 
-        assert_eq!(super::jj(&head, false), "on \u{f15c6} lsurukvy ix-patched+2 *");
+        assert_eq!(super::jj(&head, None, false), "on \u{f15c6} lsurukvy ix-patched+2 *");
     }
 
     #[test]
@@ -184,7 +200,60 @@ mod tests {
             }),
         };
 
-        assert_eq!(super::jj(&head, false), "on \u{f15c6} qpzxrtln main");
+        assert_eq!(super::jj(&head, None, false), "on \u{f15c6} qpzxrtln main");
+    }
+
+    #[test]
+    fn a_view_directory_names_the_view_and_the_last_surveys_counts() {
+        let head = JjHead {
+            change_prefix: "p".to_owned(),
+            change_rest: "sqrptoq".to_owned(),
+            flags: Flags {
+                empty: true,
+                conflict: false,
+                divergent: false,
+            },
+            bookmark: Some(Bookmark {
+                names: "main".to_owned(),
+                distance: 1,
+            }),
+        };
+        let view = View {
+            name: "ix".to_owned(),
+            counts: Some(Counts {
+                behind: 25,
+                ahead: 0,
+            }),
+        };
+
+        assert_eq!(
+            super::jj(&head, Some(&view), false),
+            "on \u{f15c6} psqrptoq main+1 ix⇣25"
+        );
+    }
+
+    #[test]
+    fn a_view_with_nothing_to_report_is_just_its_name() {
+        let head = JjHead {
+            change_prefix: "q".to_owned(),
+            change_rest: "pzxrtln".to_owned(),
+            flags: Flags {
+                empty: true,
+                conflict: false,
+                divergent: false,
+            },
+            bookmark: None,
+        };
+        for counts in [None, Some(Counts {
+            behind: 0,
+            ahead: 0,
+        })] {
+            let view = View {
+                name: "ix".to_owned(),
+                counts,
+            };
+            assert_eq!(super::jj(&head, Some(&view), false), "on \u{f15c6} qpzxrtln ix");
+        }
     }
 
     #[test]
@@ -195,10 +264,10 @@ mod tests {
                 ahead: 2,
                 behind: 1,
             }),
-            counts: Counts {
+            counts: GitCounts {
                 modified: 3,
                 untracked: 1,
-                ..Counts::default()
+                ..GitCounts::default()
             },
         };
 
@@ -210,7 +279,7 @@ mod tests {
         let head = GitHead {
             name: HeadName::Detached("c1b4a88".to_owned()),
             tracking: None,
-            counts: Counts::default(),
+            counts: GitCounts::default(),
         };
 
         assert_eq!(super::git(&head, false), "on \u{e0a0} (c1b4a88)");

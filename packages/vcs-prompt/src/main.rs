@@ -16,7 +16,7 @@
 //! ```
 
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -25,6 +25,7 @@ use color_eyre::eyre::{Result, WrapErr};
 mod git;
 mod jj;
 mod render;
+mod views;
 mod workspace;
 
 use workspace::Workspace;
@@ -71,7 +72,7 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    match segment(&workspace, !cli.no_color) {
+    match segment(&workspace, &cwd, !cli.no_color) {
         Ok(segment) => {
             println!("{segment}");
             ExitCode::SUCCESS
@@ -87,9 +88,17 @@ fn working_directory(cli: &Cli) -> Result<PathBuf> {
     )
 }
 
-fn segment(workspace: &Workspace, color: bool) -> Result<String> {
+fn segment(workspace: &Workspace, cwd: &Path, color: bool) -> Result<String> {
     Ok(match workspace {
-        Workspace::Jj(root) => render::jj(&jj::head(root)?, color),
+        Workspace::Jj(root) => {
+            // Two independent jj invocations; overlapped, the segment costs
+            // the slower one (~30ms with a release jj) instead of their sum.
+            let (head, view) = std::thread::scope(|scope| {
+                let view = scope.spawn(|| views::at(root, cwd));
+                (jj::head(root), view.join().expect("the views thread"))
+            });
+            render::jj(&head?, view.as_ref(), color)
+        }
         Workspace::Git(root) => render::git(&git::head(root)?, color),
     })
 }
