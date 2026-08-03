@@ -46,6 +46,13 @@
     cp --no-preserve=mode -R ${repoPackages.agent-harness-ex.src} "$NIX_BUILD_TOP/agent-harness-ex"
   '';
 
+  # Same contract for the :fleet_mesh path dependency (../fleet-mesh): the
+  # mesh client and warning engine extracted from this package. Same
+  # tripwire: a hex dep added there changes the FOD content, not the pin.
+  stageFleetMesh = ''
+    cp --no-preserve=mode -R ${repoPackages.fleet-mesh.src} "$NIX_BUILD_TOP/fleet-mesh"
+  '';
+
   # Mix deps (exqlite + its build deps, plus test-only credo) as a
   # fixed-output derivation so the sandboxed builds run offline; mixEnv=test
   # is a superset of prod, so the release build stages the same FOD. The SRI
@@ -58,7 +65,7 @@
     inherit version src elixir;
     mixEnv = "test";
     # deps.get loads mix.exs of every dep, path deps included.
-    postUnpack = stageAgentHarness;
+    postUnpack = stageAgentHarness + stageFleetMesh;
     inherit ((ix.pins.loadPins ./pins.json).mix-deps) hash;
   };
 
@@ -84,7 +91,7 @@
     pname = "ix-mcp-ex-check";
     inherit version src elixir erlang;
     mixDeps = mixFodDeps;
-    setupHook = stageAgentHarness;
+    setupHook = stageAgentHarness + stageFleetMesh;
     # IX_MCP_TUI_EX / IX_MCP_GMAIL_EX / IX_MCP_DASHBOARD_EX make the suite's
     # NIF-binding tests run in the sandbox (test_helper.exs skips them when
     # unset).
@@ -138,6 +145,7 @@
       export MIX_DEPS_PATH="$TEMPDIR/deps"
       cp --no-preserve=mode -R "${mixFodDeps}" "$MIX_DEPS_PATH"
       ${stageAgentHarness}
+      ${stageFleetMesh}
     '';
 
     buildPhase = ''
