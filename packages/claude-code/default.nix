@@ -690,11 +690,13 @@
   # "WARNING: Loading development channels" confirm, because this wrapper bakes
   # our own `index` stdio server as a development channel.
   #
-  # To restore: uncomment the two blocks below and point `patchedBinary` back at
-  # the `applyBytePatch` fold, then invert `tests.dev-channels-gate-intact` back
-  # to asserting the patched bytes. `devChannelsGateAnchor` stays live because
-  # that test consumes it; the anchors are re-derived by hand per upstream
-  # binary and were counted against 2.1.220.
+  # To restore: uncomment the block below and point `patchedBinary` back at the
+  # `applyBytePatch` fold, then invert `tests.dev-channels-gate-intact` back to
+  # asserting the patched bytes. `devChannelsGateAnchor` is commented with the
+  # rest because nothing consumes it while the patch is off; its four entries
+  # were counted against 2.1.220 and are STALE for any later version, since
+  # upstream reminifies the surrounding identifiers between releases. Re-derive
+  # all four from the pinned binaries before turning the patch back on.
   patchedBinary = nativeBinary;
 
   /*
@@ -732,8 +734,6 @@
   # were identical under 2.1.215 and are NOT under 2.1.220, so they cannot be
   # collapsed into one entry. Only the callee names move; the argument order
   # (`_(y(...))` on darwin, `y(_(...))` on linux) is unchanged.
-  */
-
   devChannelsGateAnchor = {
     aarch64-darwin = ''if(!g()||xn()!=="firstParty"||_(y("policySettings")))'';
     x86_64-darwin = ''if(!g()||xn()!=="firstParty"||y(_("policySettings")))'';
@@ -741,7 +741,6 @@
     aarch64-linux = ''if(!g()||An()!=="firstParty"||y(_("policySettings")))'';
   };
 
-  /*
   devChannelsGatePatch = [
     (
       let
@@ -923,28 +922,35 @@ in
         # on Linux), i.e. genuinely stock behavior.
         inherit nativeBinary stockCli;
 
-        # Byte proof that the SHIPPED helper (post-fixup, post-sign) still carries
-        # the STOCK dev-channels gate, i.e. that the byte patch above is really
-        # off and nothing else rewrote the JS region. Inverted from the old
-        # gate-disabled assertion when the patch was disabled; invert it back
-        # when the patch returns. Both counts come from `devChannelsGateAnchor`,
-        # so a reminifying version bump fails here with the same COUNT DRIFT
-        # signal the patcher's `expect` gate used to give, rather than passing
-        # vacuously against a string upstream no longer emits.
-        tests.dev-channels-gate-intact = let
-          stockCondition =
-            devChannelsGateAnchor.${system}
-              or (throw "claude-code: no dev-channels gate anchor for ${system}; re-derive it from the pinned binary (index#3788)");
-          patchedCondition = lib.replaceStrings [''!g()''] [''true''] stockCondition;
-        in
-          pkgs.runCommand "claude-code-dev-channels-gate-intact" {} ''
-            helper="${finalAttrs.finalPackage}/libexec/Claude Code"
-            gated=$(grep -cF '${stockCondition}' "$helper" || true)
-            forced=$(grep -cF '${patchedCondition}' "$helper" || true)
-            [ "$gated" -eq 1 ] || { echo "FAIL: stock gate condition not found exactly once (found $gated); re-derive devChannelsGateAnchor for ${system} against this binary" >&2; exit 1; }
-            [ "$forced" -eq 0 ] || { echo "FAIL: forced-true gate present ($forced); the byte patch is not off" >&2; exit 1; }
-            touch "$out"
-          '';
+        # Byte proof that the SHIPPED helper (post-fixup, post-sign) carries no
+        # forced-true dev-channels gate, i.e. the byte patch above is really off
+        # and nothing downstream reintroduced it. Deliberately keyed to strings
+        # that survive reminification, NOT to `devChannelsGateAnchor`: those
+        # anchors are re-derived by hand per upstream binary, and while the patch
+        # is off there is nothing a per-version anchor would catch which
+        # `patchedBinary = nativeBinary` does not already guarantee by
+        # construction. Invert this back to the anchor-keyed assertion when the
+        # patch returns, since then the anchors are load-bearing again.
+        #
+        # `if(true||` was counted as absent from the stock 2.1.220 and 2.1.221
+        # darwin-arm64 downloads, so a hit means a patch landed rather than
+        # upstream minifying it that way. The `"firstParty"` check keeps the
+        # absence assertion from passing vacuously against a JS region grep can
+        # no longer read (compression, a packaging change, a corrupted fixup).
+        #
+        # Both are `grep -c`, i.e. counts of matching LINES in a binary that is
+        # not one line: `"firstParty"` lands on 46 of them in stock 2.1.221. So
+        # these are presence and absence assertions, and the thresholds must stay
+        # `-ge 1` and `-eq 0`; an `-eq 1` here fails on the stock download, which
+        # is how this comment got written.
+        tests.dev-channels-gate-intact = pkgs.runCommand "claude-code-dev-channels-gate-intact" {} ''
+          helper="${finalAttrs.finalPackage}/libexec/Claude Code"
+          forced=$(grep -cF 'if(true||' "$helper" || true)
+          readable=$(grep -cF '"firstParty"' "$helper" || true)
+          [ "$readable" -ge 1 ] || { echo "FAIL: gate region not greppable in the shipped helper; the absence check below would pass vacuously" >&2; exit 1; }
+          [ "$forced" -eq 0 ] || { echo "FAIL: forced-true gate present on $forced line(s); the byte patch is not off" >&2; exit 1; }
+          touch "$out"
+        '';
 
         # Machine-readable knob tables for the commented knob reference at
         # the Home Manager consumption site

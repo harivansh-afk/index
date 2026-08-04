@@ -93,7 +93,7 @@
   #   updateScriptWriter = null;  plumbing: writer for passthru.updateScript (flake package set only)
   # END claude-code wrapper knob reference
 
-  # BEGIN claude-code env reference (extracted from Claude Code cli.js 2.1.220)
+  # BEGIN claude-code env reference (extracted from Claude Code cli.js 2.1.221)
   # Every documented environment variable the pinned CLI reads, one line
   # each: uncomment into a consuming machine's programs.claude-code.defaults
   # under `env` (settings env is read at CC startup even when the launch env
@@ -101,7 +101,7 @@
   # where the CLI or this wrapper bakes one; "" means unset. Vars owned by a
   # typed wrapper knob point at the knob instead of duplicating it. Sources:
   # the env-var registry inside the shipped cli.js, extracted mechanically
-  # to packages/claude-code/env-registry.tsv (all 830 names with
+  # to packages/claude-code/env-registry.tsv (all 836 names with
   # accessor types; regenerate with `nix build .#claude-code.envRegistry`),
   # cross-checked against https://code.claude.com/docs/en/env-vars. The
   # undocumented remainder in the TSV is internal experiment gates and
