@@ -13,6 +13,10 @@
 //!   object per byte, and no `Buffer` for the caller to hand to anything
 //!   that takes bytes. It is declared `Buffer`, which is a legal
 //!   `#[napi(object)]` field type in both directions.
+//! - A unit-enum field is a Rust enum on one side and its wire string on the
+//!   other, so the mirror declares it `String` and the pair of generated
+//!   codecs (`crate::convert`) moves it across, refusing a string outside the
+//!   set on the way in.
 //!
 //! The mirror keeps the same JavaScript shape and the same key names.
 //! Records whose fields all cross unchanged keep `#[napi(object)]` on the
@@ -28,10 +32,10 @@ use crate::convert;
 use crate::ty::{self, Level, TyCtx};
 
 /// The records that must cross through a mirror: those carrying a 64-bit
-/// integer or a field of bytes directly, plus those reaching one through
-/// another record. The fixpoint runs to a stop because each pass can only
-/// grow the set, which is bounded by the record count.
-pub fn mirrored_records(records: &[ir::Record]) -> Vec<String> {
+/// integer, a field of bytes, or a unit enum directly, plus those reaching
+/// one through another record. The fixpoint runs to a stop because each pass
+/// can only grow the set, which is bounded by the record count.
+pub fn mirrored_records(records: &[ir::Record], enums: &[ir::Enum]) -> Vec<String> {
     let mut mirrored: Vec<String> = Vec::new();
     loop {
         let mut grew = false;
@@ -42,7 +46,7 @@ pub fn mirrored_records(records: &[ir::Record]) -> Vec<String> {
             if record
                 .fields
                 .iter()
-                .any(|field| convert::adapts(&field.ty, &mirrored, Level::Field))
+                .any(|field| convert::adapts(&field.ty, enums, &mirrored, Level::Field))
             {
                 mirrored.push(record.name.clone());
                 grew = true;

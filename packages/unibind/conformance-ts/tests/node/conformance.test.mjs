@@ -263,6 +263,48 @@ test("a record field of bytes refuses a plain number array", () => {
   assert.throws(() => api.echoBlobs({ payload: [1, 2, 3], trailer: null }));
 });
 
+test("unit enums cross as plain strings, both ways", () => {
+  // The value is a string, not a wrapper object: `JSON.stringify` round-trips
+  // it and the declared union type is assignable from `JSON.parse` output.
+  const echoed = api.echoSeverity("warning");
+  assert.equal(echoed, "warning");
+  assert.equal(typeof echoed, "string");
+
+  // Rust matched on the variant rather than passing the string through.
+  assert.equal(api.escalate("info"), "warning");
+  assert.equal(api.escalate("warning"), "hard_failure");
+
+  // `rename_all` decides the literal; this enum is PascalCase on the wire.
+  assert.equal(api.echoOptionalKind("Finished"), "Finished");
+  assert.equal(api.echoOptionalKind(null), null);
+});
+
+test("unit enums cross as record fields", () => {
+  const finding = { severity: "hard_failure", kind: "Started", detail: "boom" };
+  const echoed = api.echoFinding(finding);
+  assert.deepEqual(echoed, finding);
+  assert.equal(JSON.parse(JSON.stringify(echoed)).severity, "hard_failure");
+});
+
+test("a string outside the closed set is refused by name", () => {
+  // Not silently mapped to a neighbouring variant, and not passed through:
+  // the message names the offending word and the set it should have come
+  // from, in every position an enum can occupy.
+  assert.throws(
+    () => api.echoSeverity("catastrophe"),
+    (error) => {
+      assert.match(error.message, /catastrophe/);
+      assert.match(error.message, /hard_failure/);
+      return true;
+    },
+  );
+  assert.throws(() => api.echoOptionalKind("started"), /started/);
+  assert.throws(
+    () => api.echoFinding({ severity: "nope", kind: "Started", detail: "x" }),
+    /nope/,
+  );
+});
+
 test("errors decode to the generated classes with the variant code", () => {
   assert.throws(
     () => api.failWith("store"),

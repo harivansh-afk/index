@@ -167,7 +167,13 @@ fn lower_named(named: NamedPath<'_>, declared: &Declared, position: Position) ->
     if path.path.segments.len() != 1 {
         return Err(unsupported(&syn::Type::Path(path.clone())));
     }
-    if declared.records.iter().any(|name| name == ident) {
+    // A record and an enumeration both cross by value in every position,
+    // and both spell as `Named`; which one a name resolves to is settled by
+    // the interface's own declarations, which is where every backend already
+    // looks to tell a record from an object handle.
+    if declared.records.iter().any(|name| name == ident)
+        || declared.enums.iter().any(|name| name == ident)
+    {
         return Ok(ir::Type::Named(ident.to_owned()));
     }
     if declared.objects.iter().any(|name| name == ident) {
@@ -191,8 +197,9 @@ fn lower_named(named: NamedPath<'_>, declared: &Declared, position: Position) ->
     Err(LowerError::new(
         segment.span(),
         format!(
-            "`{ident}` is not a #[unibind::record] in this module; only records \
-             and boundary primitives cross"
+            "`{ident}` is not a #[unibind::record] or #[unibind::enumeration] \
+             in this module; only records, enumerations, and boundary \
+             primitives cross"
         ),
     ))
 }

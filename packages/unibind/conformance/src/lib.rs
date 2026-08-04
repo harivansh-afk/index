@@ -33,6 +33,44 @@ mod _conformance {
         pub y: f64,
     }
 
+    /// How severe a conformance probe's finding is; a closed set whose
+    /// members cross as `StrEnum` values.
+    #[unibind::enumeration]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum Severity {
+        /// Routine.
+        Info,
+        /// Worth a look.
+        Warning,
+        /// Stop now.
+        HardFailure,
+    }
+
+    /// A frame kind spelled `PascalCase` on the wire, the shape
+    /// `MachineProgress.kind` has in the ix surface; proves `rename_all`
+    /// reaches the generated members without a second convention.
+    #[unibind::enumeration(rename_all = "PascalCase")]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum FrameKind {
+        /// The first frame.
+        Started,
+        /// The last one.
+        Finished,
+    }
+
+    /// A record carrying two enumerations, so the field path is covered as
+    /// well as the argument and return paths.
+    #[unibind::record]
+    #[derive(Clone)]
+    pub struct Finding {
+        /// How bad it is.
+        pub severity: Severity,
+        /// Which frame reported it.
+        pub kind: FrameKind,
+        /// Human text.
+        pub detail: String,
+    }
+
     /// Boundary failures raised by the conformance surface.
     #[unibind::error(py(base = "ValueError"))]
     #[derive(Debug)]
@@ -94,6 +132,31 @@ mod _conformance {
     /// Round-trip a record.
     pub fn echo_record(point: Point) -> Point {
         point
+    }
+
+    /// Round-trip an enumeration: argument and return in one call.
+    pub fn echo_severity(value: Severity) -> Severity {
+        value
+    }
+
+    /// Round-trip an enumeration under `Option`, so the container path is
+    /// covered too.
+    pub fn echo_optional_kind(value: Option<FrameKind>) -> Option<FrameKind> {
+        value
+    }
+
+    /// Round-trip a record whose fields are enumerations.
+    pub fn echo_finding(finding: Finding) -> Finding {
+        finding
+    }
+
+    /// The next severity up, so the Rust side is observably matching on the
+    /// variant rather than passing a string through.
+    pub fn escalate(value: Severity) -> Severity {
+        match value {
+            Severity::Info => Severity::Warning,
+            Severity::Warning | Severity::HardFailure => Severity::HardFailure,
+        }
     }
 
     /// Add with a defaulted second operand, proving `#[unibind(default)]`.

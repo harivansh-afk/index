@@ -701,3 +701,103 @@ fn records_compose_under_option_and_as_map_values() {
         assert!(dts.contains(declared), "`{declared}` is missing:\n{dts}");
     }
 }
+
+/// One unit enum, plus the two positions a value of it occupies. Off the
+/// shared fixture for the same reason `namespaced_interface` is: these
+/// tests state their rule rather than restating a snapshot.
+fn enum_interface() -> ir::Interface {
+    let severity = ir::Enum {
+        name: "Severity".to_owned(),
+        names: names(None, None),
+        docs: docs(&["How bad it is."]),
+        variants: vec![
+            ir::EnumVariant {
+                name: "Info".to_owned(),
+                wire: "info".to_owned(),
+                names: names(Some("INFO"), None),
+                docs: docs(&["Routine."]),
+            },
+            ir::EnumVariant {
+                name: "HardFailure".to_owned(),
+                wire: "hard_failure".to_owned(),
+                names: names(Some("HARD_FAILURE"), None),
+                docs: Vec::new(),
+            },
+        ],
+    };
+    let finding = ir::Record {
+        name: "Finding".to_owned(),
+        names: names(None, None),
+        docs: docs(&["One finding."]),
+        fields: vec![field("severity", None, &["How bad it is."], named("Severity"))],
+    };
+    let worst = ir::Function {
+        ret: Some(named("Severity")),
+        ..function(
+            "worst",
+            None,
+            &["The worst severity seen."],
+            vec![arg("floor", named("Severity"), None)],
+        )
+    };
+    ir::Interface {
+        enums: vec![severity],
+        records: vec![finding],
+        functions: vec![worst],
+        errors: Vec::new(),
+        objects: Vec::new(),
+        ..interface()
+    }
+}
+
+/// A unit enum is a union of the string literals that cross, never a
+/// TypeScript `enum`: the value really is a plain string, so a union is the
+/// only declaration `JSON.parse` output satisfies.
+#[test]
+fn a_unit_enum_declares_a_union_of_string_literals() {
+    let HostFiles { dts, .. } = emit(&enum_interface());
+    for declared in [
+        "export type Severity = \"info\" | \"hard_failure\";",
+        // Both positions name the union, not `string`.
+        "export declare function worst(floor: Severity): Severity;",
+        "  readonly severity: Severity;",
+    ] {
+        assert!(dts.contains(declared), "`{declared}` is missing:\n{dts}");
+    }
+    assert!(
+        !dts.contains("export enum"),
+        "a TypeScript enum is not erasable and its members are not the \
+         strings that cross:\n{dts}"
+    );
+    // A variant's own doc has nowhere of its own to live in a union, so it
+    // joins the type's block rather than being dropped.
+    assert!(dts.contains(" * - `info`: Routine."), "{dts}");
+}
+
+/// The Zod schema comes from the same IR as the declaration, so a consumer
+/// validating at run time checks exactly the set the type promises.
+#[test]
+fn a_unit_enum_gets_a_zod_schema_and_infers_back_to_the_union() {
+    let emitter = TsEmitter {
+        addon: "sample_ts".to_owned(),
+    };
+    let files = emitter.emit(&enum_interface()).expect("emits");
+    let schemas = files
+        .iter()
+        .find(|file| file.path == "schemas.ts")
+        .expect("schemas.ts is emitted")
+        .contents
+        .clone();
+    for declared in [
+        "export const Severity = z.enum([\"info\", \"hard_failure\"]).describe(\"How bad it is.\");",
+        "export type Severity = z.infer<typeof Severity>;",
+        // The record reads the enum schema by name, with no `z.lazy` thunk:
+        // enumerations are all bound before the first record.
+        "    severity: Severity.describe(\"How bad it is.\"),",
+    ] {
+        assert!(
+            schemas.contains(declared),
+            "`{declared}` is missing:\n{schemas}"
+        );
+    }
+}

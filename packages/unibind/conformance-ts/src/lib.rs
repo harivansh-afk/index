@@ -1,7 +1,8 @@
 //! Conformance addon for the unibind TypeScript backend.
 //!
 //! One `#[unibind::export]` module exercising every construct the ts
-//! backend renders: records (including a record under `Option`, records as
+//! backend renders: unit enums (as arguments, returns, and record fields),
+//! records (including a record under `Option`, records as
 //! map values, and both byte positions -- a field, which crosses as a
 //! `Buffer`, and bytes inside a container, which do not), error enums, defaulted and optional arguments, async
 //! functions with cancellation, pull streams from both free functions and
@@ -85,6 +86,70 @@ mod conformance {
         pub head: Option<Occurrence>,
         /// Occurrences keyed by path: records as map values.
         pub by_path: HashMap<String, Occurrence>,
+    }
+
+    /// How severe a finding is; a closed set that crosses as a union of
+    /// string literals in TypeScript.
+    #[unibind::enumeration]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum Severity {
+        /// Routine.
+        Info,
+        /// Worth a look.
+        Warning,
+        /// Stop now.
+        HardFailure,
+    }
+
+    /// A frame kind spelled `PascalCase` on the wire, the shape
+    /// `MachineProgress.kind` has in the ix surface; proves `rename_all`
+    /// decides the literals without a second convention.
+    #[unibind::enumeration(rename_all = "PascalCase")]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum FrameKind {
+        /// The first frame.
+        Started,
+        /// The last one.
+        Finished,
+    }
+
+    /// A record carrying two enumerations. Nothing here is 64-bit or bytes,
+    /// so this record crosses through a mirror only because an enum field is
+    /// spelled differently on the two sides.
+    #[unibind::record]
+    #[derive(Clone)]
+    pub struct Finding {
+        /// How bad it is.
+        pub severity: Severity,
+        /// Which frame reported it.
+        pub kind: FrameKind,
+        /// Human text.
+        pub detail: String,
+    }
+
+    /// Round-trip an enumeration: argument and return in one call.
+    pub fn echo_severity(value: Severity) -> Severity {
+        value
+    }
+
+    /// Round-trip an enumeration under `Option`, covering the container
+    /// path.
+    pub fn echo_optional_kind(value: Option<FrameKind>) -> Option<FrameKind> {
+        value
+    }
+
+    /// Round-trip a record whose fields are enumerations.
+    pub fn echo_finding(finding: Finding) -> Finding {
+        finding
+    }
+
+    /// The next severity up, so the Rust side is observably matching on the
+    /// variant rather than passing a string through.
+    pub fn escalate(value: Severity) -> Severity {
+        match value {
+            Severity::Info => Severity::Warning,
+            Severity::Warning | Severity::HardFailure => Severity::HardFailure,
+        }
     }
 
     /// A record whose only adapted field is bytes.

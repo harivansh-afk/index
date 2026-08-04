@@ -9,7 +9,9 @@ use std::fmt::Write as _;
 
 use unibind_core::ir;
 
-use super::types::{self, Level, doc_block, resource_close, ts_type, type_name, value_name};
+use super::types::{
+    self, Level, doc_block, literal_union, resource_close, ts_type, type_name, value_name,
+};
 use crate::host::EmitError;
 
 /// The one stream shape every stream-returning function shares.
@@ -45,6 +47,9 @@ pub fn render(interface: &ir::Interface) -> Result<String, EmitError> {
     if types::uses_buffer(interface) {
         out.push_str("import type { Buffer } from \"node:buffer\";\n\n");
     }
+    for declared in &interface.enums {
+        enum_decl(&mut out, declared);
+    }
     for record in &interface.records {
         record_decl(&mut out, interface, record)?;
     }
@@ -66,6 +71,41 @@ pub fn render(interface: &ir::Interface) -> Result<String, EmitError> {
     let mut trimmed = out.trim_end().to_owned();
     trimmed.push('\n');
     Ok(trimmed)
+}
+
+/// One enumeration: a union of the string literals that actually cross.
+///
+/// `export type` rather than `export enum`: the value napi hands back is a
+/// plain string, a union is erased at compile time, and `JSON.parse` output
+/// is assignable to it. A TypeScript `enum` would be none of those things.
+fn enum_decl(out: &mut String, declared: &ir::Enum) {
+    // Per-variant docs have nowhere of their own to live in a union, so they
+    // join the type's doc block as a list. Two adjacent JSDoc blocks would
+    // not work: an editor reads only the one nearest the declaration, so the
+    // variant meanings would be written down and still invisible.
+    let mut docs = declared.docs.clone();
+    let documented = declared
+        .variants
+        .iter()
+        .filter(|variant| !variant.docs.is_empty());
+    for (at, variant) in documented.enumerate() {
+        if at == 0 && !docs.is_empty() {
+            docs.push(String::new());
+        }
+        docs.push(format!(
+            "- `{}`: {}",
+            variant.wire,
+            variant.docs.join(" ").trim()
+        ));
+    }
+    doc_block(out, "", &docs);
+    writeln!(
+        out,
+        "export type {} = {};\n",
+        type_name(&declared.names, &declared.name),
+        literal_union(declared)
+    )
+    .expect("write to string");
 }
 
 fn record_decl(

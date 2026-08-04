@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import ctypes
+import enum
 import gc
 import threading
 import time
@@ -54,6 +55,54 @@ async def case_echo_types() -> str:
     assert isinstance(caught, conf.ConformanceError)
     message = str(caught)
     return f"all round-trips exact; raised {message!r} as ValueError subclass"
+
+
+async def case_unit_enums() -> str:
+    """A unit enum crosses as a StrEnum member, both ways, and refuses junk."""
+    # The member is an enum member AND a str, which is the whole point: code
+    # written against the old stringly surface keeps working.
+    assert issubclass(conf.Severity, enum.StrEnum)
+    assert conf.Severity.HARD_FAILURE == "hard_failure"
+    assert isinstance(conf.Severity.INFO, str)
+
+    # Returned values are real members, not bare strings.
+    echoed = conf.echo_severity(conf.Severity.WARNING)
+    assert echoed is conf.Severity.WARNING, f"got {echoed!r}"
+    assert isinstance(echoed, conf.Severity)
+
+    # A bare string is accepted on the way in and still comes back a member.
+    from_str = conf.echo_severity("info")
+    assert from_str is conf.Severity.INFO, f"got {from_str!r}"
+
+    # Rust matched on the variant rather than passing a string through.
+    assert conf.escalate(conf.Severity.INFO) is conf.Severity.WARNING
+    assert conf.escalate(conf.Severity.WARNING) is conf.Severity.HARD_FAILURE
+
+    # `rename_all` decides the wire spelling; the member name stays the
+    # Python convention.
+    assert conf.FrameKind.STARTED == "Started"
+    assert conf.echo_optional_kind(None) is None
+    assert conf.echo_optional_kind(conf.FrameKind.FINISHED) is conf.FrameKind.FINISHED
+
+    # Enum-typed record fields cross in both directions.
+    finding = conf.echo_finding(
+        conf.Finding(conf.Severity.HARD_FAILURE, conf.FrameKind.FINISHED, "boom")
+    )
+    assert finding.severity is conf.Severity.HARD_FAILURE
+    assert finding.kind is conf.FrameKind.FINISHED
+    assert finding.to_dict()["severity"] is conf.Severity.HARD_FAILURE
+
+    # A word outside the closed set is refused by name, not silently mapped.
+    caught: ValueError | None = None
+    try:
+        conf.echo_severity("catastrophe")
+    except ValueError as exc:
+        caught = exc
+    assert caught is not None, "an unknown variant did not raise"
+    message = str(caught)
+    assert "catastrophe" in message, message
+    assert "hard_failure" in message, message
+    return f"StrEnum both ways; unknown variant raised {message!r}"
 
 
 async def case_cancel_mid_flight() -> str:
@@ -309,6 +358,7 @@ async def case_static_factory() -> str:
 
 CASES: tuple[tuple[str, Callable[[], Awaitable[str]]], ...] = (
     ("echo-types", case_echo_types),
+    ("unit-enums", case_unit_enums),
     ("cancel-mid-flight", case_cancel_mid_flight),
     ("stream-backpressure", case_stream_backpressure),
     ("drop-without-close", case_resource_lifecycle),

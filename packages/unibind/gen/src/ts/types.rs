@@ -138,17 +138,37 @@ pub fn ts_type(
     })
 }
 
-/// Resolve a `Named` reference (a record or an object) to its JavaScript
-/// name.
+/// Resolve a `Named` reference (a record, an enumeration, or an object) to
+/// its JavaScript name.
 fn named_type_name<'a>(interface: &'a ir::Interface, name: &'a str) -> &'a str {
     if let Some(record) = interface.records.iter().find(|record| record.name == name) {
         return type_name(&record.names, &record.name);
+    }
+    if let Some(declared) = interface.enums.iter().find(|declared| declared.name == name) {
+        return type_name(&declared.names, &declared.name);
     }
     interface
         .objects
         .iter()
         .find(|object| object.name == name)
         .map_or(name, |object| type_name(&object.names, &object.name))
+}
+
+/// The union of string literals one enumeration declares:
+/// `"running" | "stopped"`.
+///
+/// A TypeScript `enum` would be the other option and is the wrong one: it is
+/// not erasable (so it needs a runtime object where a union needs nothing),
+/// its members are not the strings that actually cross, and `JSON.parse`
+/// output would not be assignable to it. The value napi hands back is a plain
+/// string, and this is the type that says so exactly.
+pub fn literal_union(declared: &ir::Enum) -> String {
+    declared
+        .variants
+        .iter()
+        .map(|variant| crate::literal::double_quoted(&variant.wire))
+        .collect::<Vec<_>>()
+        .join(" | ")
 }
 
 /// Every callable the host files render a signature for: the free

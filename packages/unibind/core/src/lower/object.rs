@@ -46,6 +46,7 @@ impl Objects {
     pub(super) fn declare(&mut self, item: &syn::ItemStruct, found: &marker::Marker) -> Result<()> {
         reject_stray_meta(&item.attrs)?;
         found.meta.reject_default("an object")?;
+        found.meta.reject_rename_all("an object")?;
         found.meta.reject_py_base("an object")?;
         found.meta.reject_jvm_base("an object")?;
         found.meta.reject_backends("an object")?;

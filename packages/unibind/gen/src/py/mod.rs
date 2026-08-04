@@ -28,8 +28,6 @@ impl HostEmitter for PyEmitter {
     }
 
     fn emit(&self, interface: &Interface) -> Result<Vec<HostFile>, EmitError> {
-        reject_unrendered_surface(interface)?;
-
         // Same module-name rule the pyo3 backend applies when it registers
         // the `#[pymodule]`.
         let module_name = interface
@@ -55,18 +53,4 @@ impl HostEmitter for PyEmitter {
         }
         Ok(files)
     }
-}
-
-/// Refuse the IR surface the stub emitter does not render yet, with the
-/// same pointers the pyo3 backend gives.
-fn reject_unrendered_surface(interface: &Interface) -> Result<(), EmitError> {
-    if let Some(data_enum) = interface.enums.first() {
-        return Err(EmitError {
-            message: format!(
-                "`{}` is a data enum, which phase 1 does not render",
-                data_enum.name
-            ),
-        });
-    }
-    Ok(())
 }

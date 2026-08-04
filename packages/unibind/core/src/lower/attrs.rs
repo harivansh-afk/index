@@ -4,14 +4,26 @@ use proc_macro2::{Span, TokenStream};
 use syn::spanned::Spanned as _;
 
 use super::{Backend, LowerError, Result};
+use crate::casing::{Casing, RENAME_ALL_VALUES};
 use crate::ir;
 
 /// The options a `#[unibind(...)]` attribute (or marker argument list) can
 /// carry: `py(name = "...")`, `py(base = "...")`, `ts(name = "...")`,
 /// `ex(name = "...")`, `jvm(name = "...")`, `jvm(base = "...")`,
-/// `default = ...`, the bare flags `resource`, `constructor`, and
-/// `blocking`, and (on `#[unibind::export]` only) `backends(...)`.
+/// `default = ...`, `rename_all = "..."`, the bare flags `resource`,
+/// `constructor`, and `blocking`, and (on `#[unibind::export]` only)
+/// `backends(...)`.
 #[derive(Debug, Default)]
+// The bare flags are four independent bits a caller may set in any
+// combination, which is what the lint's suggested two-variant enums cannot
+// express; `#[unibind(associated)]` made it four and turned this check red on
+// `machine-rename` before the enumeration work touched the file (ENG-12362).
+// `expect` rather than `allow`, so folding a flag away later fails here
+// instead of leaving a stale exemption behind.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one bit per bare #[unibind(...)] flag; they are orthogonal, not a state machine"
+)]
 pub struct UnibindMeta {
     pub(crate) span: Option<Span>,
     pub(crate) py_name: Option<String>,
@@ -21,6 +33,7 @@ pub struct UnibindMeta {
     pub(crate) jvm_name: Option<String>,
     pub(crate) jvm_base: Option<String>,
     pub(crate) default: Option<ir::Literal>,
+    pub(crate) rename_all: Option<Casing>,
     pub(crate) resource: bool,
     pub(crate) constructor: bool,
     pub(crate) associated: bool,
@@ -115,6 +128,12 @@ impl UnibindMeta {
             }
             self.default = other.default;
         }
+        if other.rename_all.is_some() {
+            if self.rename_all.is_some() {
+                return Err(LowerError::new(span, "duplicate unibind `rename_all`"));
+            }
+            self.rename_all = other.rename_all;
+        }
         if other.backends.is_some() {
             if self.backends.is_some() {
                 return Err(LowerError::new(span, "duplicate unibind `backends(...)`"));
@@ -190,6 +209,10 @@ impl UnibindMeta {
         }
         if entry.path().is_ident("backends") {
             return self.apply_backends(entry, span);
+        }
+        if entry.path().is_ident("rename_all") {
+            self.rename_all = Some(rename_all(entry, span)?);
+            return Ok(());
         }
         if entry.path().is_ident("default") {
             let syn::Meta::NameValue(pair) = entry else {
@@ -315,6 +338,29 @@ impl UnibindMeta {
         self.reject_if(
             self.default.is_some(),
             format!("`default` applies to function arguments, not {context}"),
+        )
+    }
+
+    /// Error out for every option that never applies to a callable, whatever
+    /// its kind. One call rather than six at each site, so a new option
+    /// cannot be rejected on functions but forgotten on methods.
+    pub(crate) fn reject_non_callable_options(&self, context: &str) -> Result<()> {
+        self.reject_default(context)?;
+        self.reject_rename_all(context)?;
+        self.reject_py_base(context)?;
+        self.reject_jvm_base(context)?;
+        self.reject_backends(context)?;
+        self.reject_resource(context)
+    }
+
+    /// Error out when a `rename_all` was given somewhere it cannot apply.
+    pub(crate) fn reject_rename_all(&self, context: &str) -> Result<()> {
+        self.reject_if(
+            self.rename_all.is_some(),
+            format!(
+                "`rename_all` sets the wire spelling of \
+                 #[unibind::enumeration] variants, not {context}"
+            ),
         )
     }
 
@@ -476,13 +522,45 @@ fn parse_backend_name(entry: &syn::Meta, backend: &str) -> Result<String> {
     Ok(value.value())
 }
 
+/// Parse `rename_all = "snake_case"`: which convention decides an
+/// enumeration's wire spellings.
+fn rename_all(entry: &syn::Meta, span: Span) -> Result<Casing> {
+    let syn::Meta::NameValue(pair) = entry else {
+        return Err(LowerError::new(
+            span,
+            "`rename_all` takes a value: rename_all = \"snake_case\"",
+        ));
+    };
+    let syn::Expr::Lit(syn::ExprLit {
+        lit: syn::Lit::Str(value),
+        ..
+    }) = &pair.value
+    else {
+        return Err(LowerError::new(
+            span,
+            "`rename_all` takes a string literal",
+        ));
+    };
+    let value = value.value();
+    Casing::parse(&value).ok_or_else(|| {
+        LowerError::new(
+            span,
+            format!(
+                "unknown `rename_all` convention `{value}`; expected one of {}",
+                RENAME_ALL_VALUES.join(", ")
+            ),
+        )
+    })
+}
+
 fn unknown_option(span: Span) -> LowerError {
     LowerError::new(
         span,
         "unknown unibind option; expected py(name = \"...\"), \
          py(base = \"...\"), ts(name = \"...\"), ex(name = \"...\"), \
          jvm(name = \"...\"), jvm(base = \"...\"), backends(...), \
-         default = ..., resource, constructor, associated, or blocking",
+         default = ..., rename_all = \"...\", resource, constructor, \
+         associated, or blocking",
     )
 }
 

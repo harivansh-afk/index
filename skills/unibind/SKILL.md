@@ -33,7 +33,7 @@ Rust with braces is a defect, and so is a `.pyi` that reads like TypeScript.
 |---|---|---|---|---|---|
 | construct, async | `#[unibind(associated)]` `async fn` returning `Self` | `static oci(): Promise<Machine>` | `@staticmethod async def oci() -> Machine` | `suspend fun` in a `companion object` | `Machine.oci(...) -> {:ok, machine}` |
 | release at scope end | `object(resource)` + `close` | `Symbol.asyncDispose`, so `await using` | `__aenter__`/`__aexit__`, so `async with` | `AutoCloseable`, so `use { }` | nothing; the BEAM drops the `ResourceArc`, or take a function |
-| closed variant set | `enum Status { Running, .. }` | `'running' \| 'stopped'` | `StrEnum` / `Literal` | `enum class` | atoms |
+| closed variant set | `#[unibind::enumeration]` `enum Status { Running, .. }` | `export type Status = "running" \| "stopped"` | `enum.StrEnum` | `enum class` | atoms |
 | variants with data | `enum Frame { Phase{..}, Done{..} }` | discriminated union, exhaustive `switch` | frozen dataclasses under a `Literal` tag, `match` | sealed interface over data classes, exhaustive `when` | tagged tuples, `case` |
 | identity | `MachineId(Uuid)` | branded string | `NewType` | `@JvmInline value class` | opaque type |
 | optionality | `Option<T>` | `T \| null` | `T \| None` | `T?`, checked by the compiler | `nil` |
@@ -46,6 +46,41 @@ rendering rather than the author: napi needs `factory` to build an instance
 from an async static and plain `#[napi]` for everything else, so
 `Machine.oci` and `Machine.list` are written the same way and come out
 different. Saying it twice is a way to say it inconsistently.
+
+### One wire spelling, four type names
+
+The closed-variant row is the one intent where the languages must agree on a
+*value*, not only on a shape: the same string is what TypeScript compares, what
+a Python `StrEnum` member holds, and what the service already puts in its JSON.
+So the rule splits in two.
+
+**The wire spelling is decided once, at lowering, and is the same in every
+language.** It defaults to `snake_case` of the Rust variant, and
+`#[unibind::enumeration(rename_all = "...")]` picks another convention for the
+whole enum. The conventions and their output are serde's, byte for byte, so a
+binding cannot disagree with the JSON `#[serde(rename_all = ...)]` produces on
+the same enum. `MachineProgress.kind` is `PascalCase` on the wire where every
+other closed set in the ix surface is `snake_case`, and that is exactly one
+word (`rename_all = "PascalCase"`) rather than a guess in each backend.
+
+**The type name, and any member identifier, is idiomatic per language.** The
+type keeps the Rust `PascalCase` name unless `ts(name = ...)` / `py(name = ...)`
+renames it, like every other declared type. A member identifier only exists
+where the language has one: Python spells members `SCREAMING_SNAKE_CASE`
+(`MachineStatus.HARD_FAILURE == "hard_failure"`), and a TypeScript union has no
+identifier at all, which is why per-variant renames are Python's business and
+the ts backend ignores them.
+
+TypeScript gets a union of string literals, never a TS `enum`: what crosses is
+a plain string, a union erases at compile time where an `enum` needs a runtime
+object, and `JSON.parse` output is assignable to a union and not to an `enum`.
+Python gets `enum.StrEnum` (3.11+) because its member *is* a `str`, so
+`isinstance`, `is`, and a caller's pre-existing `status == "running"` are all
+true of one value; the extension builds the class at `#[pymodule]` init from
+the same IR the `.pyi` declares, so there is no second source for the members.
+
+Variants that carry data are a different intent (the row below) and lowering
+still refuses them, naming the enum and the variant.
 
 Kotlin's async row is not just `suspend fun`. Structured concurrency is the
 contract: a cancelled coroutine must abort the Rust future rather than
@@ -105,7 +140,8 @@ Do not promise a surface a backend cannot render. As of 2026-08-04:
 | associated functions | yes; `#[napi(factory)]` when it returns the object, plain static otherwise | yes, `#[staticmethod]` | no | no |
 | resource close | `close()` + leak warning | `close` + `__aenter__`/`__aexit__` + `ResourceWarning` | none | flag ignored; the BEAM drop runs `Drop` |
 | scope-bound release | `[Symbol.asyncDispose]` in the generated JS wrapper, so `await using` works | `async with` | none | n/a |
-| data enums | **rejected** (`backend-ts/src/module.rs`) | **rejected** (`backend-py/src/module.rs`) | no | no |
+| unit enums | yes; union of string literals, plus `z.enum` | yes; `enum.StrEnum` | **rejected** (`backend-jvm/src/module.rs`); owes a Kotlin `enum class` | **rejected** (`backend-ex/src/module.rs`); owes an atom per variant |
+| data enums | **rejected by lowering**, naming the variant | same | same | same |
 | runtime validation | Zod schemas, `z.infer` types | **none**; Pydantic models are the gap | no | no |
 | error enums | yes | yes | yes | yes |
 

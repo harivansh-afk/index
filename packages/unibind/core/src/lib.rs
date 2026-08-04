@@ -7,6 +7,7 @@
 //! `unibind-backend-py` consume the IR and render the language-specific
 //! binding code.
 
+pub mod casing;
 pub mod embed;
 pub mod ir;
 mod lower;

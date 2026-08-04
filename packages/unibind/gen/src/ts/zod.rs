@@ -1,12 +1,14 @@
 //! Render `schemas.ts`: one [Zod](https://zod.dev) schema per record, so a
-//! consumer can validate a value crossing the boundary at runtime.
+//! consumer can validate a value crossing the boundary at runtime, plus one
+//! `z.enum` per enumeration.
 //!
 //! The schemas come out of the same IR as `index.d.ts` through the same type
 //! mapping ([`super::types`]), so a schema cannot drift from the declared
 //! type: both files are regenerated from the artifact that shipped. Only
-//! records appear here. Errors are classes `index.js` throws, objects are
-//! handles that cross by reference, and streams are a function's whole return
-//! type -- none of them is a value with a data shape to check.
+//! records and enumerations appear here. Errors are classes `index.js`
+//! throws, objects are handles that cross by reference, and streams are a
+//! function's whole return type -- none of them is a value with a data shape
+//! to check.
 //!
 //! Doc comments ride along as `.describe(...)` rather than `TSDoc`: the
 //! description survives into the schema at runtime (and into a JSON Schema
@@ -42,6 +44,11 @@ pub fn render(interface: &ir::Interface) -> Result<String, EmitError> {
         out.push_str("import { Buffer } from \"node:buffer\";\n");
     }
     out.push_str("import { z } from \"zod\";\n\n");
+    // Enumerations first: a record's field schema reads one by name, and a
+    // `const` is not hoisted, so the reference has to be already bound.
+    for declared in &interface.enums {
+        enum_schema(&mut out, declared);
+    }
     for (at, record) in interface.records.iter().enumerate() {
         record_schema(&mut out, &Scope { interface, at }, record)?;
     }
@@ -140,8 +147,41 @@ fn zod_type(scope: &Scope<'_>, ty: &ir::Type, level: Level) -> Result<String, Em
     })
 }
 
+/// One `export const <Enum> = z.enum([...])` plus the `z.infer` type, the
+/// same pairing every record schema uses, so a consumer imports one name and
+/// gets both the checker and the type.
+///
+/// `z.enum` over the wire strings rather than `z.nativeEnum`: what crosses is
+/// a plain string, and `z.infer` reads a `z.enum` back as exactly the union
+/// `index.d.ts` declares.
+fn enum_schema(out: &mut String, declared: &ir::Enum) {
+    let name = type_name(&declared.names, &declared.name);
+    let members = declared
+        .variants
+        .iter()
+        .map(|variant| crate::literal::double_quoted(&variant.wire))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let tail = describe_argument(&declared.docs).map_or_else(
+        || ";".to_owned(),
+        |description| format!(".describe({description});"),
+    );
+    writeln!(out, "export const {name} = z.enum([{members}]){tail}").expect("write to string");
+    writeln!(out, "export type {name} = z.infer<typeof {name}>;\n").expect("write to string");
+}
+
 /// The schema a `Named` field reads, deferred when it is not bound yet.
 fn named_schema(scope: &Scope<'_>, name: &str) -> Result<String, EmitError> {
+    // Enumerations are all emitted above every record, so a reference to one
+    // is always bound and never needs the `z.lazy` thunk.
+    if let Some(declared) = scope
+        .interface
+        .enums
+        .iter()
+        .find(|declared| declared.name == name)
+    {
+        return Ok(type_name(&declared.names, &declared.name).to_owned());
+    }
     let Some((at, record)) = scope
         .interface
         .records
@@ -151,9 +191,10 @@ fn named_schema(scope: &Scope<'_>, name: &str) -> Result<String, EmitError> {
     else {
         return Err(EmitError {
             message: format!(
-                "`{name}` is not a record in this interface, so it has no Zod \
-                 schema; only records cross by value (an object handle crosses \
-                 by reference, and its fields never leave Rust)"
+                "`{name}` is not a record or enumeration in this interface, so \
+                 it has no Zod schema; only records and enumerations cross by \
+                 value (an object handle crosses by reference, and its fields \
+                 never leave Rust)"
             ),
         });
     };

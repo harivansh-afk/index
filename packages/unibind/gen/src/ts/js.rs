@@ -253,7 +253,7 @@ fn object_class(out: &mut String, interface: &ir::Interface, object: &ir::Object
             out,
             interface,
             factory,
-            &class,
+            class,
             &value_name(&factory.name, &factory.names),
         );
     }

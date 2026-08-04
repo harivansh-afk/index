@@ -2,7 +2,8 @@
 //!
 //! Three files land at the npm package root: `index.d.ts` types every export
 //! (`TSDoc` from the IR's doc comments), `schemas.ts` carries a Zod schema
-//! per record for consumers that want the same shapes checked at runtime,
+//! per record and per enumeration for consumers that want the same shapes
+//! checked at runtime,
 //! and the `CommonJS` `index.js` wraps the native addon into the surface
 //! users import: decoded `Error` subclasses, async functions forwarding a
 //! trailing `AbortSignal`, streams as `AsyncIterable`s, and object classes
@@ -36,24 +37,16 @@ impl HostEmitter for TsEmitter {
     }
 
     fn emit(&self, interface: &Interface) -> Result<Vec<HostFile>, EmitError> {
-        if let Some(data_enum) = interface.enums.first() {
-            return Err(EmitError {
-                message: format!(
-                    "`{}` is a data enum, which the ts backend does not render",
-                    data_enum.name
-                ),
-            });
-        }
         let mut files = vec![HostFile {
             path: "index.d.ts".to_owned(),
             contents: dts::render(interface)?,
         }];
-        // Records are the only thing with a Zod schema, so an interface
-        // without one would land a file whose sole content is an unused
-        // `zod` import -- and a `zod` peer dependency the package does not
-        // need. No flag: the schemas come from the same IR as the types, so
-        // making them optional would only let the two drift.
-        if !interface.records.is_empty() {
+        // Records and enumerations are the only things with a Zod schema, so
+        // an interface without either would land a file whose sole content is
+        // an unused `zod` import -- and a `zod` peer dependency the package
+        // does not need. No flag: the schemas come from the same IR as the
+        // types, so making them optional would only let the two drift.
+        if !interface.records.is_empty() || !interface.enums.is_empty() {
             files.push(HostFile {
                 path: "schemas.ts".to_owned(),
                 contents: zod::render(interface)?,

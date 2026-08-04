@@ -119,11 +119,7 @@ pub(super) fn lower_callable(callable: Callable<'_>) -> Result<ir::Function> {
     };
 
     let meta = attrs::UnibindMeta::from_attrs(attributes)?;
-    meta.reject_default(kind.context())?;
-    meta.reject_py_base(kind.context())?;
-    meta.reject_jvm_base(kind.context())?;
-    meta.reject_backends(kind.context())?;
-    meta.reject_resource(kind.context())?;
+    meta.reject_non_callable_options(kind.context())?;
     match kind {
         // A `constructor` or `associated` flag routed the signature here
         // already, so only the other kinds can carry one by mistake.
@@ -236,10 +232,33 @@ fn lower_arg(arg: &syn::PatType, declared: &Declared) -> Result<ir::Arg> {
     meta.reject_resource("an argument")?;
     meta.reject_constructor("an argument")?;
     meta.reject_blocking("an argument")?;
+    meta.reject_rename_all("an argument")?;
+    let ty = lower_type(&arg.ty, declared, Position::Arg)?;
+    // Refused here rather than in each backend: a default is a `Literal`,
+    // and no backend can spell an enum variant as one. The ts glue would
+    // substitute a wire string where the user's function takes the enum, and
+    // the pyo3 signature would put a `&str` where the parameter is the enum
+    // -- two different compile errors pointing at generated code, for one
+    // shape that is easy to name here.
+    if meta.default.is_some()
+        && let ir::Type::Named(name) = &ty
+        && declared.enums.iter().any(|declared| declared == name)
+    {
+        return Err(LowerError::new(
+            pattern.ident.span(),
+            format!(
+                "argument `{}` cannot carry a default: `{name}` is a \
+                 #[unibind::enumeration], and a default is a literal no \
+                 backend can spell as a variant. Take `Option<{name}>` and \
+                 pick the fallback in the body.",
+                pattern.ident,
+            ),
+        ));
+    }
     Ok(ir::Arg {
         name: pattern.ident.to_string(),
         names: meta.names(),
-        ty: lower_type(&arg.ty, declared, Position::Arg)?,
+        ty,
         default: meta.default,
     })
 }
