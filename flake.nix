@@ -246,7 +246,7 @@
       # instrumentation series has a lib/fork-packages.nix intent entry, so
       # both default to `hold` and cannot be sent upstream until someone
       # classifies them.
-      url = "github:indexable-inc/nix/efdc2e9b2e54e51fccdc13291de4cd29a5609669";
+      url = "github:indexable-inc/nix/7ba1e9115c513c527ba93dd23218bab8e3bb1499";
       flake = false;
     };
 
