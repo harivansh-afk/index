@@ -169,7 +169,16 @@
         useMold = lib.mkOption {
           type = lib.types.bool;
           default = pkgs.stdenv.hostPlatform.isLinux;
-          description = "Link with mold on Linux.";
+          description = ''
+            Link with mold on Linux.
+
+            Kept over lld and wild on measurement rather than reputation: all
+            three are within 3% on wall time for our largest binary, and the
+            linker is only 1.3 to 1.8 GB of a 15 GB link step that rustc
+            dominates. The numbers and the revisit condition are in
+            `packages/clang-mold-musl/default.nix`, which is where the musl
+            target actually selects a linker.
+          '';
         };
         useLld = lib.mkOption {
           type = lib.types.bool;
