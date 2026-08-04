@@ -678,6 +678,26 @@
     inherit (target) hash;
   };
 
+  # The dev-channels-gate byte patch is DISABLED: the launched helper is the
+  # untouched download. Turned off while investigating a Claude Code session
+  # where subagent output disappeared from the transcript and subagents queued
+  # without ever starting, to remove a modified binary as a variable. Nothing
+  # links the patch to either symptom and the mechanism makes it unlikely (the
+  # swap forces one onboarding branch and touches neither the agent scheduler
+  # nor the renderer), so this is variable elimination, not a diagnosis.
+  #
+  # What it costs while off: every interactive launch stops on the full-screen
+  # "WARNING: Loading development channels" confirm, because this wrapper bakes
+  # our own `index` stdio server as a development channel.
+  #
+  # To restore: uncomment the two blocks below and point `patchedBinary` back at
+  # the `applyBytePatch` fold, then invert `tests.dev-channels-gate-intact` back
+  # to asserting the patched bytes. `devChannelsGateAnchor` stays live because
+  # that test consumes it; the anchors are re-derived by hand per upstream
+  # binary and were counted against 2.1.220.
+  patchedBinary = nativeBinary;
+
+  /*
   # Shared equal-length byte-patch layer primitive (also used by
   # claude-code-rainbow), so patches compose as a cacheable DAG over the single
   # download. See ./byte-patch.nix.
@@ -712,6 +732,8 @@
   # were identical under 2.1.215 and are NOT under 2.1.220, so they cannot be
   # collapsed into one entry. Only the callee names move; the argument order
   # (`_(y(...))` on darwin, `y(_(...))` on linux) is unchanged.
+  */
+
   devChannelsGateAnchor = {
     aarch64-darwin = ''if(!g()||xn()!=="firstParty"||_(y("policySettings")))'';
     x86_64-darwin = ''if(!g()||xn()!=="firstParty"||y(_("policySettings")))'';
@@ -719,6 +741,7 @@
     aarch64-linux = ''if(!g()||An()!=="firstParty"||y(_("policySettings")))'';
   };
 
+  /*
   devChannelsGatePatch = [
     (
       let
@@ -745,6 +768,7 @@
     input = nativeBinary;
     rules = devChannelsGatePatch;
   };
+  */
 
   stockCli = stdenv.mkDerivation {
     pname = "claude-code-stock";
@@ -899,22 +923,28 @@ in
         # on Linux), i.e. genuinely stock behavior.
         inherit nativeBinary stockCli;
 
-        # Byte proof that the dev-channels gate is disabled in the SHIPPED helper
-        # (post-sign, post-fixup): the silent-load branch is forced
-        # (`if(true||En()` present) and the original gated condition
-        # (`if(!g()||En()`) is gone. Grep needs no exec, so it runs on darwin too
-        # (the AMFI re-sign-then-exec caveat that blocks a runtime smoke does not
-        # apply to byte inspection). The patcher's `expect` gate already fails the
-        # build if the swap does not land exactly once; this additionally proves
-        # signing did not disturb the JS region.
-        tests.dev-channels-gate-disabled = pkgs.runCommand "claude-code-dev-channels-gate-disabled" {} ''
-          helper="${finalAttrs.finalPackage}/libexec/Claude Code"
-          patched=$(grep -c 'if(true||En()' "$helper" || true)
-          gated=$(grep -c 'if(!g()||En()' "$helper" || true)
-          [ "$patched" -ge 1 ] || { echo "FAIL: gate-disabled bytes absent" >&2; exit 1; }
-          [ "$gated" -eq 0 ] || { echo "FAIL: original gate condition present ($gated)" >&2; exit 1; }
-          touch "$out"
-        '';
+        # Byte proof that the SHIPPED helper (post-fixup, post-sign) still carries
+        # the STOCK dev-channels gate, i.e. that the byte patch above is really
+        # off and nothing else rewrote the JS region. Inverted from the old
+        # gate-disabled assertion when the patch was disabled; invert it back
+        # when the patch returns. Both counts come from `devChannelsGateAnchor`,
+        # so a reminifying version bump fails here with the same COUNT DRIFT
+        # signal the patcher's `expect` gate used to give, rather than passing
+        # vacuously against a string upstream no longer emits.
+        tests.dev-channels-gate-intact = let
+          stockCondition =
+            devChannelsGateAnchor.${system}
+              or (throw "claude-code: no dev-channels gate anchor for ${system}; re-derive it from the pinned binary (index#3788)");
+          patchedCondition = lib.replaceStrings [''!g()''] [''true''] stockCondition;
+        in
+          pkgs.runCommand "claude-code-dev-channels-gate-intact" {} ''
+            helper="${finalAttrs.finalPackage}/libexec/Claude Code"
+            gated=$(grep -cF '${stockCondition}' "$helper" || true)
+            forced=$(grep -cF '${patchedCondition}' "$helper" || true)
+            [ "$gated" -eq 1 ] || { echo "FAIL: stock gate condition not found exactly once (found $gated); re-derive devChannelsGateAnchor for ${system} against this binary" >&2; exit 1; }
+            [ "$forced" -eq 0 ] || { echo "FAIL: forced-true gate present ($forced); the byte patch is not off" >&2; exit 1; }
+            touch "$out"
+          '';
 
         # Machine-readable knob tables for the commented knob reference at
         # the Home Manager consumption site
