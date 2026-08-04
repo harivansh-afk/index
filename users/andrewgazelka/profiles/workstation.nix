@@ -339,13 +339,13 @@
   };
 
   # Shared skill source: the index repo's SKILL.md bundles (open Agent-Skills
-  # standard, `packages/agent/skills`) plus any consumer-local skills, built
+  # standard, `skills`) plus any consumer-local skills, built
   # into ONE directory and delivered to BOTH agents bare (no plugin namespace,
   # so `/<skill>` on Claude and `$<skill>` / implicit on Codex): Claude via
   # `programs.claude-code.skills`, Codex via the upstream
   # `programs.codex.skills`. Replaces the old per-agent Claude plugin wrapper.
   # Built through `skills.mkSkillsDir` rather than handed the bare
-  # `packages/agent/skills` directory, because that directory is only the
+  # `skills` directory, because that directory is only the
   # repo-local half of the catalog: skills vendored from packaged upstreams
   # (`vendoredSources`, currently agent-browser) resolve against `pkgs` inside
   # mkSkillsDir and never reach disk on the bare path. It is also the only

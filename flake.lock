@@ -650,11 +650,11 @@
     "skills": {
       "flake": false,
       "locked": {
-        "path": "./packages/agent/skills",
+        "path": "./skills",
         "type": "path"
       },
       "original": {
-        "path": "./packages/agent/skills",
+        "path": "./skills",
         "type": "path"
       },
       "parent": []

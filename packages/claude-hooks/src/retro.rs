@@ -497,7 +497,7 @@ print("session-retro dispatched: blob=" + _hash + " task=" + _s.task + " gz_byte
 /// The prompt the retro agent receives: fetch the shipped transcript
 /// from weave CAS, then run the `session-retro` skill's walk/route/dedupe/file
 /// loop over it. Adapted from the old in-session block reason plus
-/// `packages/agent/skills/session-retro/SKILL.md`.
+/// `skills/session-retro/SKILL.md`.
 fn retro_prompt(session: &str, cwd: &str, host: &str) -> String {
     let prefix = session_prefix(session);
     format!(

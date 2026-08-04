@@ -60,14 +60,14 @@
     # invalidates every dependent. Declaring each pure-data subtree as its own
     # `flake = false` path input scopes a consumer's source to just the subtree
     # it reads, so an edit under `packages/site/` no longer perturbs a
-    # `packages/agent/skills` package's drvPath. nix and nox both resolve
+    # `skills` output's drvPath. nix and nox both resolve
     # these as lock nodes
     # `{ type = "path"; path = "./<dir>"; parent = []; }` against the parent
     # tree, with no separate fetch. Nix-code roots the flake itself imports
     # (`modules`, `packages`) stay ordinary relative paths: they are
     # import-time, not source identity. See ENG-2362.
     skills = {
-      url = "path:./packages/agent/skills";
+      url = "path:./skills";
       flake = false;
     };
     examples = {
@@ -471,7 +471,7 @@
     # a local checkout and from a fetched `github:indexable-inc/index/<rev>`:
     #
     #   inputs.skills.outPath
-    #     -> /nix/store/v53pc7hv0h0aq3768j7zgxz0kl23a6zn-source/./packages/agent/skills
+    #     -> /nix/store/v53pc7hv0h0aq3768j7zgxz0kl23a6zn-source/./skills
     #
     # Recorded because the claim it replaces would send someone here for a
     # consumer that must not rebuild on an unrelated commit, where this shape

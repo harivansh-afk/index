@@ -17,7 +17,7 @@
   # its source identity. `paths.skills` is a relative-path input whose lock
   # node resolves against the PARENT tree, so a consumer vendoring index as
   # `path:./index` (ix does) sees
-  # `<consumer-tree>/index/packages/agent/skills/<name>` and re-keys every
+  # `<consumer-tree>/index/skills/<name>` and re-keys every
   # skill on every commit anywhere in that repo. The reach is the whole fleet:
   # skills -> claude-code's launch spec -> claude-code -> system-path -> each
   # host's toplevel, so one comment in ix's docs/ moved all twelve ix hosts'
@@ -67,7 +67,7 @@
   allSkills = assert lib.assertMsg (vendorCollisions == [])
   "skills: vendored skill name(s) shadow repo skills: ${lib.concatStringsSep ", " vendorCollisions}";
   assert lib.assertMsg (manifestNames == vendoredNames)
-  "skills: packages/agent/skills/vendored-skills.txt lists [${lib.concatStringsSep ", " manifestNames}] but vendoredSources defines [${lib.concatStringsSep ", " vendoredNames}]; the SessionStart materializer reads the file, so they must match";
+  "skills: skills/vendored-skills.txt lists [${lib.concatStringsSep ", " manifestNames}] but vendoredSources defines [${lib.concatStringsSep ", " vendoredNames}]; the SessionStart materializer reads the file, so they must match";
     lib.sort lib.lessThan (skillNames ++ vendoredNames);
 
   partitioned = lib.partition (lib.hasPrefix "antithesis") allSkills;

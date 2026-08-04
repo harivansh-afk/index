@@ -37,7 +37,7 @@ in {
     script = ''
       root="$(mktemp -d)"
       mkdir -p "$root/packages/agent"
-      cp -R ${paths.skills} "$root/packages/agent/skills"
+      cp -R ${paths.skills} "$root/skills"
       chmod -R u+w "$root"
 
       CLAUDE_PROJECT_DIR="$root" \
@@ -47,7 +47,7 @@ in {
       if ! diff -r ${skillsDir} "$root/.claude/skills" > materialize.diff; then
         echo "agent-skills-materialize: the SessionStart hook's .claude/skills is not .#skills." >&2
         echo "Left is nix (.#skills), right is the hook. Fix .claude/hooks/agent-instructions.sh" >&2
-        echo "or packages/agent/skills/vendored-skills.txt until the two agree:" >&2
+        echo "or skills/vendored-skills.txt until the two agree:" >&2
         cat materialize.diff >&2
         exit 1
       fi
