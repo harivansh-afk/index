@@ -282,6 +282,9 @@ mod tests {
     #[test]
     fn a_second_allowed_host_is_honored() {
         let hosts = vec![String::from("github.com"), String::from("git.example")];
-        assert!(answers(&request("protocol=https\nhost=git.example\n\n"), &hosts));
+        assert!(answers(
+            &request("protocol=https\nhost=git.example\n\n"),
+            &hosts
+        ));
     }
 }

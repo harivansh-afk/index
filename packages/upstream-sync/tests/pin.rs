@@ -115,17 +115,46 @@ struct Case {
 #[test]
 fn each_topology_maps_to_the_exit_status_it_should() {
     let cases = [
-        Case { name: "good", repo: "good", auto_update: false, class: "current", status: 0 },
+        Case {
+            name: "good",
+            repo: "good",
+            auto_update: false,
+            class: "current",
+            status: 0,
+        },
         // Floating: legitimately off the branch between a cron rebase and the
         // rolling PR merging, so reported and not failed.
-        Case { name: "floating", repo: "floating", auto_update: true, class: "diverged", status: 0 },
-        Case { name: "off", repo: "off", auto_update: false, class: "diverged", status: 1 },
+        Case {
+            name: "floating",
+            repo: "floating",
+            auto_update: true,
+            class: "diverged",
+            status: 0,
+        },
+        Case {
+            name: "off",
+            repo: "off",
+            auto_update: false,
+            class: "diverged",
+            status: 1,
+        },
         // Unverifiable, which must fail rather than pass: the whole point.
-        Case { name: "nobookmark", repo: "nobookmark", auto_update: false, class: "unknown", status: 1 },
+        Case {
+            name: "nobookmark",
+            repo: "nobookmark",
+            auto_update: false,
+            class: "unknown",
+            status: 1,
+        },
     ];
     let h = Harness::new(GH_STUB);
     for case in cases {
-        let run = h.run(&mapping_of(&[entry(case.name, case.repo, case.auto_update, "")]));
+        let run = h.run(&mapping_of(&[entry(
+            case.name,
+            case.repo,
+            case.auto_update,
+            "",
+        )]));
         assert_eq!(
             run.status, case.status,
             "{}: stdout:\n{}\nstderr:\n{}",
@@ -141,7 +170,11 @@ fn each_topology_maps_to_the_exit_status_it_should() {
 fn a_diverged_rev_pinned_fork_names_both_shas_and_the_merge_base() {
     let h = Harness::new(GH_STUB);
     let run = h.run(&mapping_of(&[entry("off", "off", false, "")]));
-    assert_eq!(run.status, 1, "stdout:\n{}\nstderr:\n{}", run.stdout, run.stderr);
+    assert_eq!(
+        run.status, 1,
+        "stdout:\n{}\nstderr:\n{}",
+        run.stdout, run.stderr
+    );
     // All three have to be in the operator's face, since neither a repin nor a
     // bookmark push is obviously the right move.
     for expected in [
@@ -161,9 +194,7 @@ fn a_diverged_rev_pinned_fork_names_both_shas_and_the_merge_base() {
 fn a_waiver_on_the_pinned_rev_exits_zero_and_a_stale_one_does_not() {
     let h = Harness::new(GH_STUB);
     let waiver = |rev: &str| {
-        format!(
-            r#","pinDivergence":{{"rev":"{rev}","reason":"ENG-11646: someone has to decide"}}"#
-        )
+        format!(r#","pinDivergence":{{"rev":"{rev}","reason":"ENG-11646: someone has to decide"}}"#)
     };
 
     let live = h.run(&mapping_of(&[entry(
@@ -172,7 +203,11 @@ fn a_waiver_on_the_pinned_rev_exits_zero_and_a_stale_one_does_not() {
         false,
         &waiver("9999999999999999999999999999999999999999"),
     )]));
-    assert_eq!(live.status, 0, "stdout:\n{}\nstderr:\n{}", live.stdout, live.stderr);
+    assert_eq!(
+        live.status, 0,
+        "stdout:\n{}\nstderr:\n{}",
+        live.stdout, live.stderr
+    );
 
     // The pin moved, so an acknowledgement made about the old rev says nothing
     // about this one.
@@ -182,7 +217,11 @@ fn a_waiver_on_the_pinned_rev_exits_zero_and_a_stale_one_does_not() {
         false,
         &waiver("3333333333333333333333333333333333333333"),
     )]));
-    assert_eq!(stale.status, 1, "stdout:\n{}\nstderr:\n{}", stale.stdout, stale.stderr);
+    assert_eq!(
+        stale.status, 1,
+        "stdout:\n{}\nstderr:\n{}",
+        stale.stdout, stale.stderr
+    );
     assert!(stale.stderr.contains("expired"), "{}", stale.stderr);
 }
 

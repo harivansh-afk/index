@@ -22,7 +22,12 @@ const PATCH_TWO: &str = "fakefix: teach the widget to self-align";
 fn run_sync(mapping: &Path, work: &Path, envs: &[(&str, String)]) -> common::Run {
     let exe = env!("CARGO_BIN_EXE_upstream-sync");
     let mapping = mapping.display().to_string();
-    run_bin(exe, &["--dry-run", "--mapping", &mapping, "fake"], work, envs)
+    run_bin(
+        exe,
+        &["--dry-run", "--mapping", &mapping, "fake"],
+        work,
+        envs,
+    )
 }
 
 #[test]
@@ -57,7 +62,10 @@ fn the_series_is_the_branchs_own_line_not_everything_merged_into_it() {
     }
     // The merge commits are history, not patches. Naming one as a patch would
     // have the tool open an upstream PR titled "Merge upstream main".
-    for merge in ["Merge upstream main", "Merge the revision a lock still pins"] {
+    for merge in [
+        "Merge upstream main",
+        "Merge the revision a lock still pins",
+    ] {
         assert!(
             !run.stdout.contains(merge),
             "series leaked the merge commit '{merge}':\n{}",

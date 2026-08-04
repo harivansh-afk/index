@@ -71,8 +71,8 @@ fn extract(app: &str, format: Format, domain: Option<&str>) -> Result<()> {
         .with_context(|| format!("reading Keychain secret {:?}", target.keychain_service))?;
     let key = crypto::derive_key(&password);
 
-    let mut cookies =
-        store::read(&target.cookie_db, &key).with_context(|| format!("reading {}", target.cookie_db.display()))?;
+    let mut cookies = store::read(&target.cookie_db, &key)
+        .with_context(|| format!("reading {}", target.cookie_db.display()))?;
     if let Some(d) = domain {
         cookies.retain(|c| c.host.contains(d));
     }
@@ -102,7 +102,11 @@ fn netscape_line(c: &Cookie) -> String {
     } else {
         c.expires_utc / 1_000_000 - CHROMIUM_TO_UNIX_SECS
     };
-    let subdomains = if c.host.starts_with('.') { "TRUE" } else { "FALSE" };
+    let subdomains = if c.host.starts_with('.') {
+        "TRUE"
+    } else {
+        "FALSE"
+    };
     let secure = if c.secure { "TRUE" } else { "FALSE" };
     format!(
         "{}\t{subdomains}\t{}\t{secure}\t{expires}\t{}\t{}",

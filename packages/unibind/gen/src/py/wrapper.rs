@@ -51,7 +51,9 @@ pub fn render(interface: &ir::Interface, module_name: &str) -> String {
         for record in &records {
             writeln!(out, "    {record},").expect("write to string");
         }
-        out.push_str("):\n    _collections_abc.Mapping.register(_record)\ndel _collections_abc, _record\n");
+        out.push_str(
+            "):\n    _collections_abc.Mapping.register(_record)\ndel _collections_abc, _record\n",
+        );
     }
     out
 }

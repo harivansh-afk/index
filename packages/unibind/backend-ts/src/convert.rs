@@ -247,7 +247,11 @@ fn inbound_kinds(interface: &ir::Interface, mirrored: &[String]) -> Vec<ir::IntK
     }
     WIDE_INT_KINDS
         .into_iter()
-        .filter(|kind| found.iter().any(|seen| seen.rust_name() == kind.rust_name()))
+        .filter(|kind| {
+            found
+                .iter()
+                .any(|seen| seen.rust_name() == kind.rust_name())
+        })
         .collect()
 }
 

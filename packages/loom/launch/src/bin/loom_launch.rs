@@ -97,7 +97,10 @@ fn exit_code(status: ExitStatus) -> ExitCode {
     if status.success() {
         ExitCode::SUCCESS
     } else {
-        let code = status.code().and_then(|c| u8::try_from(c).ok()).unwrap_or(1);
+        let code = status
+            .code()
+            .and_then(|c| u8::try_from(c).ok())
+            .unwrap_or(1);
         ExitCode::from(code)
     }
 }

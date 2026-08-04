@@ -134,7 +134,8 @@ fn lend(host: &str, remote_command: &[String]) -> Result<()> {
     let local_for_thread = local.clone();
     // The agent dies with this process, so the loan cannot outlive the
     // session even if ssh is killed rather than exiting.
-    let agent = std::thread::spawn(move || serve::run(&local_for_thread, &allow, &serve::GhResolver));
+    let agent =
+        std::thread::spawn(move || serve::run(&local_for_thread, &allow, &serve::GhResolver));
 
     let status = Command::new("ssh")
         .arg("-R")
@@ -148,7 +149,9 @@ fn lend(host: &str, remote_command: &[String]) -> Result<()> {
     if agent.is_finished() {
         // The agent only returns on a bind failure, which is the
         // interesting error to surface over ssh's exit code.
-        agent.join().map_err(|_| color_eyre::eyre::eyre!("credential agent panicked"))??;
+        agent
+            .join()
+            .map_err(|_| color_eyre::eyre::eyre!("credential agent panicked"))??;
     }
 
     if status.success() {

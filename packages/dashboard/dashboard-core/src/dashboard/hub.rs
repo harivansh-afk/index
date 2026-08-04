@@ -935,7 +935,6 @@ struct Imported {
 }
 
 pub struct Update {
-
     /// The raw Loro update, as the websocket transport frames it.
     pub(crate) bytes: Vec<u8>,
     /// The same bytes base64'd, as an SSE `data:` field requires.

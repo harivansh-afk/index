@@ -231,8 +231,11 @@ fn object_class(out: &mut String, interface: &ir::Interface, object: &ir::Object
         out.push_str("  constructor(...args) {\n");
         out.push_str("    if (args[0] === nativeHandle) {\n      this.#handle = args[1];\n      return;\n    }\n");
         out.push_str("    try {\n");
-        writeln!(out, "      this.#handle = new native.{class}(...args.map(normalizeArg));")
-            .expect("write to string");
+        writeln!(
+            out,
+            "      this.#handle = new native.{class}(...args.map(normalizeArg));"
+        )
+        .expect("write to string");
         out.push_str("    } catch (error) {\n      throw decodeError(error);\n    }\n  }\n");
     } else {
         out.push_str("  /** Instances come from the exported functions returning this type. */\n");

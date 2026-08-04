@@ -96,7 +96,10 @@ struct Forked {
 fn fork_of_upstream(root: &Path) -> Forked {
     let upstream = init_upstream(root);
     let fork = root.join("fork");
-    git(root, &["clone", "--quiet", upstream.to_str().unwrap(), "fork"]);
+    git(
+        root,
+        &["clone", "--quiet", upstream.to_str().unwrap(), "fork"],
+    );
     let base = git(&fork, &["rev-parse", "main"]);
     Forked {
         upstream,
@@ -190,13 +193,25 @@ impl Fixture {
         } = fork_of_upstream(root);
 
         git(&fork, &["checkout", "--quiet", "-B", "p0", &base]);
-        commit_patch(&fork, "patch-0.txt", &format!("{}\n", first.0), first.0, first.1);
+        commit_patch(
+            &fork,
+            "patch-0.txt",
+            &format!("{}\n", first.0),
+            first.0,
+            first.1,
+        );
         let p0 = git(&fork, &["rev-parse", "HEAD"]);
 
         // The tree the second patch lands, committed normally and then
         // re-parented, because commit-tree is the only way to author the
         // parent order this shape needs.
-        commit_patch(&fork, "patch-1.txt", &format!("{}\n", second.0), "scratch", "");
+        commit_patch(
+            &fork,
+            "patch-1.txt",
+            &format!("{}\n", second.0),
+            "scratch",
+            "",
+        );
         #[expect(
             clippy::literal_string_with_formatting_args,
             reason = "^{tree} is git revision syntax, not a format placeholder"
@@ -249,7 +264,13 @@ impl Fixture {
         } = fork_of_upstream(root);
         git(&fork, &["checkout", "--quiet", "-B", "ix-patched", &base]);
         for (i, (subject, body)) in patches.iter().enumerate() {
-            commit_patch(&fork, &format!("patch-{i}.txt"), &format!("{subject}\n"), subject, body);
+            commit_patch(
+                &fork,
+                &format!("patch-{i}.txt"),
+                &format!("{subject}\n"),
+                subject,
+                body,
+            );
         }
 
         // An earlier revision of the first patch, on its own line off the same
@@ -260,7 +281,13 @@ impl Fixture {
             &fork,
             &["checkout", "--quiet", "-b", "earlier-revision", &base],
         );
-        commit_patch(&fork, "patch-0.txt", &format!("{subject}\nearlier\n"), subject, body);
+        commit_patch(
+            &fork,
+            "patch-0.txt",
+            &format!("{subject}\nearlier\n"),
+            subject,
+            body,
+        );
         let earlier = git(&fork, &["rev-parse", "HEAD"]);
 
         // Merged for ancestry alone; -s ours keeps the branch's tree, which is
@@ -283,7 +310,10 @@ impl Fixture {
         // Upstream moves and the branch merges it forward.
         fs::write(upstream.join("upstream-feature"), "moved on\n").unwrap();
         git(&upstream, &["add", "."]);
-        git(&upstream, &["commit", "--quiet", "-m", "upstream: a later change"]);
+        git(
+            &upstream,
+            &["commit", "--quiet", "-m", "upstream: a later change"],
+        );
         git(&fork, &["fetch", "--quiet", "origin", "main"]);
         git(
             &fork,
@@ -310,11 +340,23 @@ impl Fixture {
             base,
         } = fork_of_upstream(root);
         git(&fork, &["checkout", "--quiet", "-B", "ix-patched", &base]);
-        commit_patch(&fork, "patch-direct.txt", &format!("{}\n", direct.0), direct.0, direct.1);
+        commit_patch(
+            &fork,
+            "patch-direct.txt",
+            &format!("{}\n", direct.0),
+            direct.0,
+            direct.1,
+        );
 
         // The pull request's own branch, merged back with the merge button.
         git(&fork, &["checkout", "--quiet", "-b", "pr-branch"]);
-        commit_patch(&fork, "patch-pr.txt", &format!("{}\n", merged.0), merged.0, merged.1);
+        commit_patch(
+            &fork,
+            "patch-pr.txt",
+            &format!("{}\n", merged.0),
+            merged.0,
+            merged.1,
+        );
         git(&fork, &["checkout", "--quiet", "ix-patched"]);
         git(
             &fork,
@@ -351,7 +393,13 @@ impl Fixture {
 
         // The revision a lock still pins, under the subject it had then.
         git(&fork, &["checkout", "--quiet", "-b", "pinned", &base]);
-        commit_patch(&fork, "patch.txt", &format!("{}\nearlier\n", old.0), old.0, old.1);
+        commit_patch(
+            &fork,
+            "patch.txt",
+            &format!("{}\nearlier\n", old.0),
+            old.0,
+            old.1,
+        );
         let pinned = git(&fork, &["rev-parse", "HEAD"]);
 
         // The branch's own copy, retitled.
@@ -400,7 +448,10 @@ impl Fixture {
     /// with the megamerge commit under the `ix-patched` bookmark.
     fn seal(root: &Path, upstream: &Path, base_ref: &str, patches: &[(&str, &str)]) -> Self {
         let fork = root.join("fork");
-        git(root, &["clone", "--quiet", upstream.to_str().unwrap(), "fork"]);
+        git(
+            root,
+            &["clone", "--quiet", upstream.to_str().unwrap(), "fork"],
+        );
         git(&fork, &["checkout", "--quiet", "-b", "series", base_ref]);
         for (i, (subject, body)) in patches.iter().enumerate() {
             fs::write(fork.join(format!("patch-{i}.txt")), format!("{subject}\n")).unwrap();

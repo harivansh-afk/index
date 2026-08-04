@@ -391,7 +391,6 @@ pub fn validate(forks: &[Fork]) -> Result<()> {
             }
         }
         for (subject, intent) in &fork.patches {
-
             let Some(stance) = intent.upstream.as_deref() else {
                 continue;
             };

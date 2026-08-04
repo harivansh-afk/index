@@ -468,8 +468,8 @@ pub fn bash_habits_guard() {
     if let Some(sub) = ext_diff_offender(&raw)
         && let Some(driver) = configured_diff_driver(cwd)
     {
-            deny(format!(
-                "`git {sub}` here renders through `diff.external = {driver}`, not git. You get \
+        deny(format!(
+            "`git {sub}` here renders through `diff.external = {driver}`, not git. You get \
                  columnar side-by-side text with no `+`/`-` prefixes, no `@@` headers and no \
                  `a/`,`b/` paths -- so a sweep for added lines silently matches nothing, and the \
                  output is not a patch you can apply. Add `--no-ext-diff` (and `--no-textconv` \
@@ -1567,8 +1567,8 @@ enum Writes {
 
 fn writes(name: &str) -> Option<Writes> {
     match name {
-        "rm" | "rmdir" | "unlink" | "shred" | "truncate" | "touch" | "mkdir" | "mkfifo"
-        | "tee" | "mv" => Some(Writes::Operands),
+        "rm" | "rmdir" | "unlink" | "shred" | "truncate" | "touch" | "mkdir" | "mkfifo" | "tee"
+        | "mv" => Some(Writes::Operands),
         "chmod" | "chown" | "chgrp" => Some(Writes::OperandsAfterMode),
         "cp" | "install" | "ln" | "rsync" => Some(Writes::LastOperand),
         "sed" | "gsed" | "perl" => Some(Writes::InPlaceOperands),
@@ -1592,7 +1592,9 @@ fn value_opts(name: &str) -> &'static [&'static str] {
         // (`s|a/b|c/d|`) and is not one.
         "sed" | "gsed" => &["-e", "--expression", "-f", "--file", "-l", "--line-length"],
         "perl" => &["-e", "-E"],
-        "install" => &["-m", "--mode", "-o", "--owner", "-g", "--group", "-S", "--suffix"],
+        "install" => &[
+            "-m", "--mode", "-o", "--owner", "-g", "--group", "-S", "--suffix",
+        ],
         "cp" | "mv" | "ln" => &["-S", "--suffix"],
         "rsync" => &["--exclude", "--include", "--filter", "-e", "--rsh"],
         "chmod" | "chown" | "chgrp" => &["--reference"],
@@ -1619,22 +1621,20 @@ fn target_directory(args: &[String]) -> Option<&str> {
 /// True when a `sed`/`perl` argument selects in-place editing: `-i`,
 /// `--in-place`, the suffix form (`-i.bak`), or a bundled group (`-pi`).
 fn edits_in_place(args: &[String]) -> bool {
-    args.iter()
-        .take_while(|a| a.as_str() != "--")
-        .any(|a| {
-            if a == "--in-place" || a.starts_with("--in-place=") {
-                return true;
-            }
-            // A backup suffix rides attached to the flag (`-i.bak`), so only the
-            // leading alphanumerics of a short group are flags.
-            a.strip_prefix('-')
-                .filter(|rest| !rest.starts_with('-'))
-                .is_some_and(|rest| {
-                    rest.chars()
-                        .take_while(char::is_ascii_alphanumeric)
-                        .any(|c| c == 'i')
-                })
-        })
+    args.iter().take_while(|a| a.as_str() != "--").any(|a| {
+        if a == "--in-place" || a.starts_with("--in-place=") {
+            return true;
+        }
+        // A backup suffix rides attached to the flag (`-i.bak`), so only the
+        // leading alphanumerics of a short group are flags.
+        a.strip_prefix('-')
+            .filter(|rest| !rest.starts_with('-'))
+            .is_some_and(|rest| {
+                rest.chars()
+                    .take_while(char::is_ascii_alphanumeric)
+                    .any(|c| c == 'i')
+            })
+    })
 }
 
 /// The target part of a token that opens an output redirection (`>`, `>>`,
@@ -1780,8 +1780,9 @@ struct Write {
 fn literal_prefix(tok: &str) -> Option<&str> {
     // Without a `/` the expansion is the whole path component, so there is no
     // directory left to judge.
-    tok.find(['$', '`'])
-        .map_or(Some(tok), |at| tok[..at].rfind('/').map(|slash| &tok[..=slash]))
+    tok.find(['$', '`']).map_or(Some(tok), |at| {
+        tok[..at].rfind('/').map(|slash| &tok[..=slash])
+    })
 }
 
 /// Resolve a write target token against the statement's working directory,
@@ -1924,8 +1925,7 @@ fn write_guard_decision(env: &WriteGuardEnv, payload: &Value) -> Option<String> 
             continue;
         }
         for write in writes_of(&stmt, &cwd) {
-            if let Some(toplevel) =
-                crate::protected_toplevel(&env.git, &write.path, &env.protected)
+            if let Some(toplevel) = crate::protected_toplevel(&env.git, &write.path, &env.protected)
             {
                 return Some(refusal(&write.subject, &toplevel));
             }
@@ -3195,15 +3195,24 @@ mod tests {
         for (cwd, cmd) in [
             // Reading inside a primary checkout is always fine, including a
             // read whose OUTPUT goes somewhere else entirely.
-            (&fx.primary, "rg -n pattern flake.nix > /tmp/hits.txt".to_owned()),
-            (&fx.primary, "cat flake.nix | sed -e 's/a/b/' > /tmp/x".to_owned()),
+            (
+                &fx.primary,
+                "rg -n pattern flake.nix > /tmp/hits.txt".to_owned(),
+            ),
+            (
+                &fx.primary,
+                "cat flake.nix | sed -e 's/a/b/' > /tmp/x".to_owned(),
+            ),
             (&fx.primary, "sed -e 's/a/b/' flake.nix".to_owned()),
             (&fx.primary, "cp flake.nix /tmp/backup.nix".to_owned()),
             (&fx.primary, "truncate -s 0 /tmp/log".to_owned()),
             (&fx.primary, "chmod 0755 /tmp/script.sh".to_owned()),
             (&fx.primary, "make 2>&1 | tee /tmp/build.log".to_owned()),
             // The caller's own linked worktree is theirs to write.
-            (&worktree, "cat > doc/note.md <<'EOF'\nhello\nEOF".to_owned()),
+            (
+                &worktree,
+                "cat > doc/note.md <<'EOF'\nhello\nEOF".to_owned(),
+            ),
             (&worktree, "rm -rf modules/new.nix".to_owned()),
             (&worktree, "patch -p1 < /tmp/x.diff".to_owned()),
             // git is git-guard's, so this guard stays silent on it rather than
@@ -3237,10 +3246,7 @@ mod tests {
             },
             write_env(&[]),
         ] {
-            assert_eq!(
-                write_guard_decision(&env, &bash(&fx.primary, danger)),
-                None
-            );
+            assert_eq!(write_guard_decision(&env, &bash(&fx.primary, danger)), None);
         }
         // Another tool's payload, and a payload carrying no command at all.
         assert_eq!(

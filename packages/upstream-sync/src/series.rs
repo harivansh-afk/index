@@ -73,7 +73,12 @@ impl Repo {
             &["remote", "add", "upstream", &fork.upstream_url],
         )?;
 
-        let tip = fetch(&dir, &fork.name, "fork", &format!("refs/heads/{}", fork.bookmark))?;
+        let tip = fetch(
+            &dir,
+            &fork.name,
+            "fork",
+            &format!("refs/heads/{}", fork.bookmark),
+        )?;
         // A fork based off a non-default branch declares `upstreamRef` in
         // the registry (nix's 2.34.7 base sits on 2.34-maintenance):
         // merge-basing against the default branch would undershoot the base

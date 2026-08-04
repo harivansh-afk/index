@@ -235,7 +235,12 @@ fn sample_objects() -> Vec<ir::Object> {
     };
     let watch = ir::Function {
         ret: Some(ir::Type::Stream(Box::new(ir::Type::Int(ir::IntKind::I64)))),
-        ..function("watch", None, &["Every value the counter takes."], Vec::new())
+        ..function(
+            "watch",
+            None,
+            &["Every value the counter takes."],
+            Vec::new(),
+        )
     };
     let tail = ir::Function {
         asyncness: ir::Asyncness::Async,
@@ -610,7 +615,12 @@ fn namespaced_interface() -> ir::Interface {
     };
     let watch = ir::Function {
         ret: Some(ir::Type::Stream(Box::new(owned_string()))),
-        ..function("watch", None, &["Every event, as a pull stream."], Vec::new())
+        ..function(
+            "watch",
+            None,
+            &["Every event, as a pull stream."],
+            Vec::new(),
+        )
     };
     let namespace = ir::Function {
         ret: Some(named("Keys")),

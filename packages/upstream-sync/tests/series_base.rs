@@ -19,7 +19,12 @@ const PATCH_TWO: &str = "fakefix: teach the widget to self-align";
 fn run_sync(mapping: &Path, work: &Path, envs: &[(&str, String)]) -> common::Run {
     let exe = env!("CARGO_BIN_EXE_upstream-sync");
     let mapping = mapping.display().to_string();
-    run_bin(exe, &["--dry-run", "--mapping", &mapping, "fake"], work, envs)
+    run_bin(
+        exe,
+        &["--dry-run", "--mapping", &mapping, "fake"],
+        work,
+        envs,
+    )
 }
 
 #[test]

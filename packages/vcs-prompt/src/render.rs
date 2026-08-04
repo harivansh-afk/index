@@ -181,7 +181,10 @@ mod tests {
             }),
         };
 
-        assert_eq!(super::jj(&head, None, false), "on \u{f15c6} lsurukvy ix-patched+2 *");
+        assert_eq!(
+            super::jj(&head, None, false),
+            "on \u{f15c6} lsurukvy ix-patched+2 *"
+        );
     }
 
     #[test]
@@ -244,15 +247,21 @@ mod tests {
             },
             bookmark: None,
         };
-        for counts in [None, Some(Counts {
-            behind: 0,
-            ahead: 0,
-        })] {
+        for counts in [
+            None,
+            Some(Counts {
+                behind: 0,
+                ahead: 0,
+            }),
+        ] {
             let view = View {
                 name: "ix".to_owned(),
                 counts,
             };
-            assert_eq!(super::jj(&head, Some(&view), false), "on \u{f15c6} qpzxrtln ix");
+            assert_eq!(
+                super::jj(&head, Some(&view), false),
+                "on \u{f15c6} qpzxrtln ix"
+            );
         }
     }
 

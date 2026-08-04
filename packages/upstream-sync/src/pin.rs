@@ -457,16 +457,16 @@ pub fn run(
         markdown,
     )?;
 
-    let problems: Vec<&str> = rows
-        .iter()
-        .filter_map(|r| r.problem.as_deref())
-        .collect();
+    let problems: Vec<&str> = rows.iter().filter_map(|r| r.problem.as_deref()).collect();
     if problems.is_empty() {
         if !json && !markdown {
             // "all clear" over a table showing three diverged pins is the same
             // silent-success shape this gate exists to refuse, so the pass line
             // counts what it passed.
-            println!("{}", paint(GREEN, &format!("no failing pin: {}", tally(&rows))));
+            println!(
+                "{}",
+                paint(GREEN, &format!("no failing pin: {}", tally(&rows)))
+            );
         }
         return Ok(());
     }
@@ -500,19 +500,11 @@ fn tally(rows: &[Row]) -> String {
 /// the table lands in a step summary, the detail in the job log.
 fn render_table(rows: &[Row]) -> String {
     const HEADERS: [&str; 8] = [
-        "fork",
-        "pin",
-        "bookmark",
-        "tip",
-        "state",
-        "behind",
-        "ahead",
-        "note",
+        "fork", "pin", "bookmark", "tip", "state", "behind", "ahead", "note",
     ];
     let unknown = || "?".to_owned();
-    let short = |sha: Option<&str>| {
-        sha.map_or_else(unknown, |v| v.chars().take(12).collect::<String>())
-    };
+    let short =
+        |sha: Option<&str>| sha.map_or_else(unknown, |v| v.chars().take(12).collect::<String>());
     let cells: Vec<Vec<String>> = rows
         .iter()
         .map(|r| {
@@ -601,9 +593,18 @@ mod tests {
             Some(&cmp()),
         );
         let problem = v.problem.expect("a gated divergence states its problem");
-        assert!(problem.contains("0f356d7cf513ca074a2122079defeb95810b6a91"), "{problem}");
-        assert!(problem.contains("f200a3a8d4921393547f93166cce8cebcb2b0e44"), "{problem}");
-        assert!(problem.contains("2c6d06e9387cf58167cb5a7ab91cee7333d8d17c"), "{problem}");
+        assert!(
+            problem.contains("0f356d7cf513ca074a2122079defeb95810b6a91"),
+            "{problem}"
+        );
+        assert!(
+            problem.contains("f200a3a8d4921393547f93166cce8cebcb2b0e44"),
+            "{problem}"
+        );
+        assert!(
+            problem.contains("2c6d06e9387cf58167cb5a7ab91cee7333d8d17c"),
+            "{problem}"
+        );
         assert!(problem.contains("72 commit(s)"), "{problem}");
         assert!(problem.contains("54 commit(s)"), "{problem}");
     }
@@ -611,7 +612,13 @@ mod tests {
     #[test]
     fn a_floating_input_is_reported_and_not_gated() {
         let f = fork("btop", true, None);
-        let v = verdict(&f, Class::DIVERGED, Some("9f43b7904e2d"), None, Some(&cmp()));
+        let v = verdict(
+            &f,
+            Class::DIVERGED,
+            Some("9f43b7904e2d"),
+            None,
+            Some(&cmp()),
+        );
         assert!(v.problem.is_none());
         assert!(v.note.contains("rolling PR"), "{}", v.note);
     }
@@ -623,13 +630,25 @@ mod tests {
             reason: "ENG-11646".to_owned(),
         };
         let f = fork("git", false, Some(waiver));
-        let covered = verdict(&f, Class::DIVERGED, Some("69fbc5cfd883"), None, Some(&cmp()));
+        let covered = verdict(
+            &f,
+            Class::DIVERGED,
+            Some("69fbc5cfd883"),
+            None,
+            Some(&cmp()),
+        );
         assert!(covered.problem.is_none());
         assert!(covered.note.contains("ENG-11646"), "{}", covered.note);
 
         // The pin moved, so the acknowledgement someone made about the old rev
         // says nothing about this one.
-        let moved = verdict(&f, Class::DIVERGED, Some("aaaaaaaaaaaa"), None, Some(&cmp()));
+        let moved = verdict(
+            &f,
+            Class::DIVERGED,
+            Some("aaaaaaaaaaaa"),
+            None,
+            Some(&cmp()),
+        );
         let problem = moved.problem.expect("an expired waiver still fails");
         assert!(problem.contains("expired"), "{problem}");
         assert!(problem.contains("69fbc5cfd883"), "{problem}");

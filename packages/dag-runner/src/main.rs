@@ -483,12 +483,8 @@ impl PipeCapture {
                     result = stdout_task => PipeTaskCompletion::Stdout(result),
                     result = stderr_task => PipeTaskCompletion::Stderr(result),
                 },
-                (Some(stdout_task), None) => {
-                    PipeTaskCompletion::Stdout(stdout_task.await)
-                }
-                (None, Some(stderr_task)) => {
-                    PipeTaskCompletion::Stderr(stderr_task.await)
-                }
+                (Some(stdout_task), None) => PipeTaskCompletion::Stdout(stdout_task.await),
+                (None, Some(stderr_task)) => PipeTaskCompletion::Stderr(stderr_task.await),
                 (None, None) => return,
             };
             match completion {
@@ -569,7 +565,9 @@ impl OwnedProcessGroup {
 
 impl Drop for OwnedProcessGroup {
     fn drop(&mut self) {
-        if self.armed && let Err(error) = self.id.signal(libc::SIGKILL) {
+        if self.armed
+            && let Err(error) = self.id.signal(libc::SIGKILL)
+        {
             eprintln!(
                 "dag-runner: failed to kill process group {} during cleanup: {error}",
                 self.id.0
@@ -677,10 +675,7 @@ async fn run_command(
         capture.abort();
     }
     capture.finish().await;
-    let CapturedStreams {
-        stdout,
-        mut stderr,
-    } = capture.take();
+    let CapturedStreams { stdout, mut stderr } = capture.take();
     stderr.push_str(&extra_stderr);
     CommandOutput {
         outcome,
