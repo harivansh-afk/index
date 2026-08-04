@@ -68,6 +68,11 @@ fn reject_unsupported(signature: &syn::Signature) -> Result<()> {
 
 /// One callable to lower: its attributes, signature, the module's declared
 /// types, and which callable position it sits in.
+/// `Copy` because every field is a shared reference and `lower_callable` only
+/// reads them: without it `clippy::needless_pass_by_value` reads the by-value
+/// parameter as a move that never happens. No `Debug`, because `syn` is pinned
+/// without `extra-traits` and its nodes have none to derive from.
+#[derive(Clone, Copy)]
 pub(super) struct Callable<'a> {
     pub(super) attributes: &'a [syn::Attribute],
     pub(super) signature: &'a syn::Signature,

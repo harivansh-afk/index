@@ -8,7 +8,8 @@
     entries = builtins.readDir directory;
     skill =
       lib.optional
-      (segments != []
+      (segments
+        != []
         && builtins.hasAttr "SKILL.md" entries
         && entries."SKILL.md" == "regular")
       {
@@ -57,12 +58,8 @@
 
   sources = assert lib.assertMsg (duplicateNames == [])
   "skills: source paths collapse to duplicate skill name(s): ${lib.concatStringsSep ", " duplicateNames}";
-    lib.listToAttrs (
-      map (record: {
-        name = record.name;
-        value = ingest record.name record.path;
-      })
-      skillRecords
+    lib.genAttrs' skillRecords (
+      record: lib.nameValuePair record.name (ingest record.name record.path)
     );
 
   skillNames = lib.sort lib.lessThan (lib.attrNames sources);
@@ -104,9 +101,11 @@
   "skills: skills/vendored-skills.txt lists [${lib.concatStringsSep ", " manifestNames}] but vendoredSources defines [${lib.concatStringsSep ", " vendoredNames}]; the SessionStart materializer reads the file, so they must match";
     lib.sort lib.lessThan (skillNames ++ vendoredNames);
 
-  partitioned = lib.partition (
-    name: name == "antithesis" || lib.hasPrefix "antithesis-" name
-  ) allSkills;
+  partitioned =
+    lib.partition (
+      name: name == "antithesis" || lib.hasPrefix "antithesis-" name
+    )
+    allSkills;
 
   antithesisSkills = partitioned.right;
 

@@ -61,10 +61,8 @@ defmodule IxMcp.Sessions do
 
     ActionLog.session_directory(log)
     |> Enum.filter(fn row ->
-      Keyword.get(opts, :children, false) or row.parent == nil
-    end)
-    |> Enum.filter(fn row ->
-      Keyword.get(opts, :all, false) or row.last_seen_at != nil or row.id == self_id
+      (Keyword.get(opts, :children, false) or row.parent == nil) and
+        (Keyword.get(opts, :all, false) or row.last_seen_at != nil or row.id == self_id)
     end)
     |> Enum.map(fn row ->
       row

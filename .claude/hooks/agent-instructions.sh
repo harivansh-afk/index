@@ -96,10 +96,18 @@ materialize_skills() {
     done < "$manifest"
   fi
 
-  for src in "$tree"/*/; do
-    [ -d "$src" ] || continue
-    cp -RL "${src%/}" "$dest/"
-  done
+  # `lib/skills.nix` discovers skills recursively: any directory holding a
+  # regular SKILL.md is one, published under its segments below `skills/`
+  # joined with `-`, and the walk continues through directories that hold no
+  # SKILL.md of their own. So `skills/antithesis/` is both a skill and a group
+  # (`antithesis`, `antithesis-debug`, ...), while `skills/nix/` is only a
+  # group (`nix-style`, never `nix`). Copying the top level alone published
+  # the group directories and none of the skills under them (ENG-12261 nested
+  # the catalog; this reimplementation stayed flat).
+  while IFS= read -r src; do
+    name=${src#"$tree"/}
+    cp -RL "$src" "$dest/${name//\//-}"
+  done < <(find "$tree" -mindepth 1 -type d -exec test -f '{}/SKILL.md' \; -print)
 
   chmod -R u+w "$dest"
 }

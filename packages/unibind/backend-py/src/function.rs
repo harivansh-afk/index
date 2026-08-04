@@ -64,6 +64,9 @@ impl Target<'_> {
 ///
 /// `name` and `user` are both `&Ident`; naming them keeps a transposed pair
 /// from compiling into `super::close::my_module(..)`.
+/// `Copy` because both renderers only read it; by value without `Copy` reads
+/// to `clippy::needless_pass_by_value` as a move that never happens.
+#[derive(Clone, Copy)]
 struct CallParts<'a> {
     name: &'a Ident,
     forwarded: &'a [TokenStream],
@@ -73,6 +76,9 @@ struct CallParts<'a> {
 /// Everything one rendered pyo3 item needs, gathered once by
 /// [`render_callable`] and consumed by whichever of the sync/async renderers
 /// the callable's asyncness selects.
+///
+/// `Copy` for the same reason as [`CallParts`].
+#[derive(Clone, Copy)]
 struct ItemParts<'a, 'ctx> {
     function: &'a ir::Function,
     ctx: &'a Ctx<'ctx>,

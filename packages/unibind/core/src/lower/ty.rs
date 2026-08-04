@@ -148,6 +148,9 @@ fn lower_path(path: &syn::TypePath, declared: &Declared, position: Position) -> 
 ///
 /// Three views of one syntax node, kept together so a caller cannot hand
 /// `lower_named` a `segment` and `ident` that came from different paths.
+/// `Copy` for the same reason as [`super::func::Callable`]: three shared
+/// references that `lower_named` only reads.
+#[derive(Clone, Copy)]
 struct NamedPath<'a> {
     path: &'a syn::TypePath,
     segment: &'a syn::PathSegment,
