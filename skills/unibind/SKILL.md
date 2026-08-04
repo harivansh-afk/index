@@ -113,6 +113,26 @@ So the shipped ix SDKs are TypeScript and Python. The JVM and Elixir backends
 serve other unibind consumers, and their gaps are stated in their own rejection
 messages, which are worth reading before designing around them.
 
+## Examples are copied, so they are house style
+
+An SDK example is read as a template, not as a demo, so anything hand-rolled
+in one becomes a pattern in somebody's codebase. Argument parsing is where
+this shows up first: reach for the language's real parser, never index into
+the raw argv.
+
+| | parser |
+|---|---|
+| TypeScript | `parseArgs` from `node:util`, stable since Node 20, so no dependency |
+| Python | `argparse`, as `packages/minecraft/probe/mc_probe.py` already does |
+| Rust | `clap` |
+| Kotlin | `kotlinx-cli`, or `clikt` where subcommands earn it |
+
+`process.argv[2]` and `sys.argv[1]` accept anything, report nothing, and
+teach the reader to do the same. The same rule covers the rest of an
+example's surface: use the standard library's path, time and JSON handling
+rather than string manipulation, because the example is the documentation
+that gets executed.
+
 ## Adding an intent
 
 The IR's function kind lives in lowering, not in the IR data: `Kind` in
