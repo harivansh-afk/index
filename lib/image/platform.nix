@@ -402,8 +402,143 @@
     })
     config.ix.networking.expose;
   exposeFirewallPorts = proto: map (e: e.port) (lib.filter (e: e.firewall && e.protocol == proto) exposeList);
+
+  # --- account-store secret attachments --------------------------------------
+  #
+  # Which stored secrets a VM is created with, declared in the image so the
+  # answer travels with the definition rather than with whoever typed the
+  # command. `deployment.secrets` in a fleet spec lands here (see
+  # `identityModule` in fleet.nix), and both readers -- the fleet plan
+  # ix-fleet consumes and the `fleet.resolve` evaluator `ix apply` reads --
+  # take `ix.secretAttachments`, so there is one normalization rather than two
+  # that drift.
+
+  # The account-store key. Lower snake_case is ix's own constraint on a secret
+  # name, checked here so a typo fails the eval instead of the create RPC.
+  isSecretName = name: builtins.match "[a-z][a-z0-9_]*" name != null;
+
+  secretType = lib.types.submodule {
+    options = {
+      env = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "GH_TOKEN";
+        description = ''
+          Environment variable name the stored value is injected as. Mutually
+          exclusive with `file`.
+        '';
+      };
+
+      file = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "github/token";
+        description = ''
+          Guest-relative path the stored value is written to, under
+          `/run/secrets`. Mutually exclusive with `env`.
+        '';
+      };
+
+      owner = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "nginx";
+        description = ''
+          Guest unix user that owns the delivered file. File targets only;
+          `null` keeps the root-owned default.
+        '';
+      };
+
+      mode = lib.mkOption {
+        # A quoted octal string, never a Nix integer. `mode = 0400` is the
+        # decimal 400 to Nix, which is 0620 as permission bits -- nothing
+        # anyone means, and unrecoverable once it is a number. ix-fleet's plan
+        # model still accepts `str | int` for the same key; this refuses the
+        # int half at eval rather than carrying the ambiguity into the create
+        # RPC, which parses the string as octal exactly like `--secret-file`.
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "0400";
+        description = ''
+          Permission bits for the delivered file, as a quoted octal string
+          between `"0001"` and `"0777"`. File targets only; `null` keeps the
+          0600 default.
+        '';
+      };
+    };
+  };
+
+  # One `ix.secrets` entry as the create RPC's `SecretAttachment`. `owner` and
+  # `mode` are omitted rather than sent as null, because the server tells
+  # "absent, keep the default" from "explicitly set" by the key's presence.
+  secretAttachment = sourceName: secret:
+    assert lib.assertMsg (isSecretName sourceName)
+    "secret key '${sourceName}' must be lower snake_case: [a-z][a-z0-9_]*";
+    assert lib.assertMsg (!(secret.env != null && secret.file != null))
+    "secret '${sourceName}' cannot set both env and file";
+    assert lib.assertMsg (secret.env != null || secret.file != null)
+    "secret '${sourceName}' must set either env or file";
+      if secret.env != null
+      then {
+        name = sourceName;
+        target = {
+          name = secret.env;
+          injectAs = "env";
+        };
+      }
+      else {
+        name = sourceName;
+        target =
+          {
+            name = secret.file;
+            injectAs = "file";
+          }
+          // lib.optionalAttrs (secret.owner != null) {inherit (secret) owner;}
+          // lib.optionalAttrs (secret.mode != null) {inherit (secret) mode;};
+      };
 in {
   options.ix = {
+    secrets = lib.mkOption {
+      type = lib.types.attrsOf secretType;
+      default = {};
+      example = lib.literalExpression ''
+        {
+          github_token = {
+            file = "github/token";
+            owner = "root";
+            mode = "0400";
+          };
+        }
+      '';
+      description = ''
+        Account-store secrets delivered into this image's VM, keyed by the
+        name they were stored under with `ix secret set`.
+
+        Declared in the image so the VM's secret needs travel with its
+        definition: a fleet's `deployment.secrets` merges into this option, and
+        a module that needs a credential can ask for it directly instead of
+        relying on whoever runs the deploy to pass `--secret-file`.
+
+        Delivery happens once, when the VM is created. Adding an entry for a VM
+        that already exists is refused by `ix apply` with the recreate spelled
+        out rather than applied half way, because nothing copies a stored value
+        into a live VM (ENG-12214).
+      '';
+    };
+
+    secretAttachments = lib.mkOption {
+      type = lib.types.listOf (lib.types.attrsOf lib.types.anything);
+      internal = true;
+      readOnly = true;
+      description = ''
+        [`ix.secrets`](#opt-ix.secrets) in the shape both consumers want: the
+        create RPC's `SecretAttachment` list, ordered by source key.
+
+        Read by the fleet plan (`ix-fleet`) and by the `fleet.resolve`
+        evaluator (`ix apply`). Not an input; set `ix.secrets`.
+      '';
+    };
+
     healthChecks = lib.mkOption {
       type = lib.types.attrsOf healthCheckType;
       default = {};
@@ -516,6 +651,8 @@ in {
   };
 
   config = {
+    ix.secretAttachments = lib.mapAttrsToList secretAttachment config.ix.secrets;
+
     ix.networking.portClaims =
       exposePortClaims
       // {
