@@ -101,78 +101,52 @@ marked where they overclaim.
 
 ## What the persistent evaluator measured, 2026-08-04
 
-Phase 3 was built far enough to price the rest of it (nix#43 `0d2a10906`, nix#44
-`e2c75f598`). Measured on dev-compute-1 and reproduced on dev-compute-4, against
-ix main `96e14957a479`, evaluating
-`nixosConfigurations.<host>.config.system.build.toplevel.drvPath` in one
-`nix eval-persistent` process. Every number was checked against a `drvPath` from
-a fresh process, and a warm answer that disagreed was counted as a failure
-rather than a speedup.
+Phase 3 was built far enough to price the rest of it (nix#43 `0d2a10906`,
+nix#44 `e2c75f598`), on dev-compute-1 against ix main `96e14957a479`, one host's
+`config.system.build.toplevel.drvPath` through one `nix eval-persistent`
+process. Every number was checked against a `drvPath` from a fresh process.
+**Full write-up, including the tables and what it did not verify: ENG-12311.**
 
 1. **Sharing across hosts is real and free.** A second host in the same
-   unedited tree costs **25.0%** of the first, 7.3s of 29.2s cpu. Three quarters
-   of an evaluation is work a live evaluator already reuses, with no read sets
-   and no invalidation graph. Decision 1's persistent process is worth building
-   for this alone.
+   unedited tree costs **25.0%** of the first. Three quarters of an evaluation
+   is work a live evaluator already reuses, with no read sets and no
+   invalidation graph. Decision 1 is worth building for this alone.
 
-2. **A one character edit takes all of it back.** The edited host returns to
-   **112.7%** of cold, against the 4.3% direct invalidation correction 1 above
-   reports. Identity is what is lost. An edited tree is a new `SourceAccessor`,
-   `SourcePath` compares on the accessor's serial number, so every `Expr` under
-   the tree is reparsed and every `Env` chain reached through `self` is new.
+2. **A one character edit takes all of it back**, to **112.7%** of cold, against
+   the 4.3% direct invalidation correction 1 above reports. Identity is what is
+   lost: an edited tree is a new `SourceAccessor`, `SourcePath` compares on the
+   accessor's serial number, so every `Expr` under the tree is reparsed and
+   every `Env` chain reached through `self` is new.
 
-3. **Files are not the lever, so Decision 2's boundary set is aimed at the
-   wrong boundary.** `evalFile` accounting for the warm request after the edit:
-   **32,278 calls, 31,592 already answered** from the path-keyed cache. 97.9% of
-   file evaluation is reused today. Only 686 files are re-evaluated, and even
-   pretending file evaluation were the whole of cold's 25.7s, 686 of 5,717 files
-   bound the rest at **3.1s of a 28.6s run**. Edit-stable file identity was
-   built to check this, keyed on the tree identity with its version stripped,
-   the view of the tree the path is reached through, the path within the tree,
-   and the file's content hash. A second evaluation reached that key **four
-   times**. It is not landed, being unsound by construction and worth nothing
-   even if it were sound; only the accounting landed.
+3. **Files are not the lever, so Decision 2's boundary set is aimed at the wrong
+   boundary.** The warm request after the edit asks `evalFile` for **32,278**
+   files and is **already answered 31,592** times, so 97.9% of file evaluation
+   is reused today, and the 686 files left bound the rest at about 3.1s of a
+   28.6s run. Edit-stable file identity was built to check this and reached its
+   key four times; it is not landed, being unsound by construction and worth
+   nothing even if it were sound.
 
 4. **The remaining boundary is the function application.** `pkgs` and the module
-   fixpoint are applications whose arguments derive from the edited tree. Nix
+   fixpoint are applications whose arguments derive from the edited tree, Nix
    memoises no application anywhere, and no file-level naming reaches them.
-   Keying on `(function identity, argument identity)` is the next lever and is
-   unstarted. Decision 3's warning that argument identity is the likeliest place
-   for a soundness bug stands unchanged; what has moved is that correction 3
-   above puts value-level provenance at 22 of 22 recall, so the invalidation
-   side could now check it.
+   Unstarted by decision (ENG-12311). Decision 3's warning that argument
+   identity is the likeliest place for a soundness bug stands unchanged; what
+   has moved is that correction 3 above puts value-level provenance at 22 of 22
+   recall, so the invalidation side could now check it.
 
-Two process-lifetime caches had to be fixed before any of this was measurable,
-because a process that evaluates twice reads its own stale state.
-`GitRepo::getCachedWorkdirInfo` is keyed on the repository path and `InputCache`
-is keyed on the input, so a working tree under edit resolves to the same key
-before and after the edit. Without both fixes a request made after a one
-character edit answered in **11ms with the pre-edit derivation**.
+None of this was measurable until two process-lifetime caches were fixed, since
+a process that evaluates twice otherwise reads its own stale state: without them
+a request made after a one character edit answered in **11ms with the pre-edit
+derivation** (nix#43).
 
-### What this did not verify
-
-What the 686 re-evaluated files actually cost; the 3.1s is a proportional bound
-and a deliberately generous one. One host pair, one tree, one edit to one string
-in one inventory entry, so nothing here covers a tree-wide reformat, a flake
-input bump, or the twelve-node case. The retained set of a persistent evaluator
-is still unmeasured, because nothing was retained per boundary.
-
-### Two measurement traps, both hit here
-
-Both are the same failure: a measurement that cannot tell "nothing happened"
-from "not measured". Correction 4 above is a third instance, and this document
-has now produced three.
-
-A probe that short-circuits at the root `flake.nix` serves the previous
-evaluation's whole outputs value. The run then costs 112.5% and returns a wrong
-`drvPath`, which reads as a clean ceiling on reuse and is a run that measured
-nothing. The valid figure in item 3 came from the counters with the probe off
-and the `drvPath` agreeing with a fresh process.
-
-A `Counter` counts only under `NIX_SHOW_STATS` and otherwise reads a constant
-zero. The file identity counters were `Counter`s, and reported zero hits and
-zero misses while the probe was demonstrably changing the answer. A counter read
-to decide whether a mechanism did anything has to count unconditionally.
+Two traps hit on the way, both the same failure as correction 4 above, which
+makes three in this document: a measurement that cannot tell "nothing happened"
+from "not measured". A probe that short-circuits at the root `flake.nix` serves
+the previous evaluation's whole outputs value, so the run reads as a clean
+ceiling on reuse while measuring nothing. A `Counter` counts only under
+`NIX_SHOW_STATS`, so the file identity counters read zero hits and zero misses
+while the probe was demonstrably changing the answer. A counter read to decide
+whether a mechanism did anything has to count unconditionally.
 
 ## The measured anchor
 
