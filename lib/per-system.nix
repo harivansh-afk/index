@@ -326,7 +326,7 @@
       # self-adapting SVG embedded bare renders its light palette for Safari
       # readers on GitHub's dark theme. Any markdown embed of such an SVG must
       # go through a `<picture>` whose dark source points at a committed
-      # `-dark.svg` twin (the creating-a-readme skill documents the pattern).
+      # `-dark.svg` twin. The gate below enforces that pair.
       def "main svg-dark" [] {
         let offenders = (
           owned-files [--hidden --extension md --exclude .git --exclude .claude]

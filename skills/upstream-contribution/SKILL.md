@@ -5,8 +5,8 @@ description: "Opening a pull request against a third-party upstream: their CONTR
 
 ## Upstream contribution
 
-This covers a PR whose target is someone else's repo. For a PR against our own
-repos, read the `workflow` skill instead.
+This covers a PR whose target is someone else's repo. For an owned repository,
+follow that repository's local workflow instructions.
 
 ### Read their rules before writing anything
 

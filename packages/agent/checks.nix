@@ -15,6 +15,8 @@ in {
     script = ''
       test -d ${skillsDir}
       test -d ${agentsDir}
+      test -f ${skillsDir}/antithesis-debug/SKILL.md
+      test -f ${skillsDir}/nix-debugger/SKILL.md
     '';
   };
 
