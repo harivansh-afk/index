@@ -108,7 +108,7 @@ fn needs_signal(interface: &ir::Interface) -> bool {
     let members = interface
         .objects
         .iter()
-        .flat_map(|object| object.methods.iter().chain(object.factories.iter()));
+        .flat_map(|object| object.methods.iter().chain(object.associated.iter()));
     fns.chain(members)
         .any(|function| matches!(function.asyncness, ir::Asyncness::Async))
 }

@@ -41,9 +41,9 @@ pub fn render_object(object: &ir::Object, ctx: &TyCtx<'_>) -> Result<TokenStream
         .map(|ctor| render_constructor(ctor, object, ctx))
         .transpose()?;
 
-    let mut factories = Vec::new();
-    for factory in &object.factories {
-        factories.push(render_factory(factory, object, ctx)?);
+    let mut associated = Vec::new();
+    for function in &object.associated {
+        associated.push(render_associated(function, object, ctx)?);
     }
 
     let mut methods = Vec::new();
@@ -82,7 +82,7 @@ pub fn render_object(object: &ir::Object, ctx: &TyCtx<'_>) -> Result<TokenStream
         #[::napi_derive::napi]
         impl #handle {
             #constructor
-            #(#factories)*
+            #(#associated)*
             #(#methods)*
             #resource_surface
         }
@@ -116,15 +116,13 @@ fn render_method(
     render_callable(method, ctx, &wrapper, &call, Callee::Method { object })
 }
 
-/// A `#[unibind(factory)]` associated function, rendered as a napi static.
+/// A `#[unibind(associated)]` function, rendered as a napi static.
 ///
-/// `#[napi(factory)]` is the one napi shape that may be async and still
-/// hand back an instance, which is why a factory exists at all: a
-/// constructor cannot await. The user's function returns the object type
-/// itself, so the returned value is wrapped into the handle exactly as a
-/// constructor's is; the shared callable path does the rest, including the
-/// error mapping and the `Result` shape.
-fn render_factory(
+/// The shared callable path does the work, including the error mapping,
+/// the `Result` shape, and wrapping an object return into its handle; only
+/// the call target differs from a method's, since there is no instance to
+/// call through.
+fn render_associated(
     factory: &ir::Function,
     object: &ir::Object,
     ctx: &TyCtx<'_>,
@@ -147,7 +145,7 @@ fn render_factory(
         ctx,
         &wrapper,
         &call,
-        Callee::Factory {
+        Callee::Associated {
             object: &object.name,
         },
     )

@@ -248,7 +248,7 @@ fn object_class(out: &mut String, interface: &ir::Interface, object: &ir::Object
         .expect("write to string");
         out.push_str("    }\n    this.#handle = args[1];\n  }\n");
     }
-    for factory in &object.factories {
+    for factory in &object.associated {
         factory_delegation(
             out,
             interface,

@@ -31,7 +31,7 @@ Rust with braces is a defect, and so is a `.pyi` that reads like TypeScript.
 
 | Intent | Rust | TypeScript | Python | Kotlin | Elixir |
 |---|---|---|---|---|---|
-| construct, async | associated `async fn` returning `Self` | `static oci(): Promise<Machine>` | `@staticmethod async def oci() -> Machine` | `suspend fun` in a `companion object` | `Machine.oci(...) -> {:ok, machine}` |
+| construct, async | `#[unibind(associated)]` `async fn` returning `Self` | `static oci(): Promise<Machine>` | `@staticmethod async def oci() -> Machine` | `suspend fun` in a `companion object` | `Machine.oci(...) -> {:ok, machine}` |
 | release at scope end | `object(resource)` + `close` | `Symbol.asyncDispose`, so `await using` | `__aenter__`/`__aexit__`, so `async with` | `AutoCloseable`, so `use { }` | nothing; the BEAM drops the `ResourceArc`, or take a function |
 | closed variant set | `enum Status { Running, .. }` | `'running' \| 'stopped'` | `StrEnum` / `Literal` | `enum class` | atoms |
 | variants with data | `enum Frame { Phase{..}, Done{..} }` | discriminated union, exhaustive `switch` | frozen dataclasses under a `Literal` tag, `match` | sealed interface over data classes, exhaustive `when` | tagged tuples, `case` |
@@ -39,6 +39,13 @@ Rust with braces is a defect, and so is a `.pyi` that reads like TypeScript.
 | optionality | `Option<T>` | `T \| null` | `T \| None` | `T?`, checked by the compiler | `nil` |
 | sequence | `UniStream<T>` | `AsyncIterable` | `__aiter__`/`__anext__` | `Flow<T>` | `Stream` |
 | failure | error enum | error subclasses | exception hierarchy | sealed exception hierarchy | `{:error, reason}` |
+| a verb on the type | `#[unibind(associated)]` returning anything else | `static list(): Promise<Machine[]>` | `@staticmethod async def list()` | `companion object` | module function |
+
+One flag covers both associated rows, and the return type decides the
+rendering rather than the author: napi needs `factory` to build an instance
+from an async static and plain `#[napi]` for everything else, so
+`Machine.oci` and `Machine.list` are written the same way and come out
+different. Saying it twice is a way to say it inconsistently.
 
 Kotlin's async row is not just `suspend fun`. Structured concurrency is the
 contract: a cancelled coroutine must abort the Rust future rather than
@@ -95,7 +102,7 @@ Do not promise a surface a backend cannot render. As of 2026-08-04:
 |---|---|---|---|---|
 | objects | yes | yes | **rejected outright** (`backend-jvm/src/module.rs`), no handle registry | yes, as `ResourceArc` handles |
 | async | yes | yes | **rejected outright** (`backend-jvm/src/function.rs`) | free functions only; object members rejected (`backend-ex/src/object.rs`) |
-| static factory | yes, `#[napi(factory)]` | yes, `#[staticmethod]` | no | no |
+| associated functions | yes; `#[napi(factory)]` when it returns the object, plain static otherwise | yes, `#[staticmethod]` | no | no |
 | resource close | `close()` + leak warning | `close` + `__aenter__`/`__aexit__` + `ResourceWarning` | none | flag ignored; the BEAM drop runs `Drop` |
 | scope-bound release | `[Symbol.asyncDispose]` in the generated JS wrapper, so `await using` works | `async with` | none | n/a |
 | data enums | **rejected** (`backend-ts/src/module.rs`) | **rejected** (`backend-py/src/module.rs`) | no | no |

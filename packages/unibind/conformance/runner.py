@@ -297,6 +297,10 @@ async def case_static_factory() -> str:
         assert scoped.label() == "delta"
     assert not scoped.is_open()
 
+    # An associated function that does not return the object is a plain
+    # staticmethod.
+    assert conf.Gate.describe("epsilon") == "gate:epsilon"
+
     await opened.close()
     await copy.close()
     assert conf.closed_gates() == closed_base + 3, "each factory instance closed once"

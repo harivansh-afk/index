@@ -140,7 +140,7 @@ fn object_decl(
         out.push_str("  /** Instances come from the exported functions returning this type. */\n");
         out.push_str("  private constructor();\n");
     }
-    for factory in &object.factories {
+    for factory in &object.associated {
         doc_block(out, "  ", &factory.docs);
         writeln!(
             out,

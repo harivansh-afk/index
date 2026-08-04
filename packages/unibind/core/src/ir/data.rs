@@ -109,13 +109,14 @@ pub struct Object {
     /// object itself is implied); `throws` may name an error.
     #[serde(default)]
     pub constructor: Option<Function>,
-    /// Named associated functions that construct the object, in
-    /// declaration order. Receiver-less like the constructor, but each
-    /// keeps its own name and may be async, so one object can offer
-    /// several. Unlike the constructor, `ret` carries the object type
-    /// rather than implying it.
+    /// Functions on the type rather than on an instance, in declaration
+    /// order. Receiver-less like the constructor, but each keeps its own
+    /// name and may be async, so one object can offer several. `ret`
+    /// carries the real return type rather than implying the object, which
+    /// is what lets one of these construct (`Machine.oci`) and another
+    /// answer something else about the type (`Machine.list`).
     #[serde(default)]
-    pub factories: Vec<Function>,
+    pub associated: Vec<Function>,
     /// Methods in declaration order; each implicitly takes `&self`.
     #[serde(default)]
     pub methods: Vec<Function>,

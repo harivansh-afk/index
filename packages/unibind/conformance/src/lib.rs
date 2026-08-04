@@ -241,16 +241,16 @@ mod _conformance {
         /// Open a gate after an async hop: the shape `__new__` cannot take,
         /// since a Python constructor is synchronous. Renders as a
         /// `@staticmethod` returning a coroutine, and one object may carry
-        /// several factories, each keeping its own name.
-        #[unibind(factory)]
+        /// several of these, each keeping its own name.
+        #[unibind(associated)]
         pub async fn opened(label: String) -> Result<Self, ConformanceError> {
             tokio::time::sleep(Duration::from_millis(1)).await;
             Self::new(label)
         }
 
-        /// A sync factory beside the async one, so both renderings and a
-        /// second factory on one object are covered.
-        #[unibind(factory)]
+        /// A sync one beside the async one, so both renderings and a
+        /// second associated function on one object are covered.
+        #[unibind(associated)]
         pub fn named_after(other: String) -> Result<Self, ConformanceError> {
             // Refuse here rather than leaning on `new`: `format!` would
             // turn an empty label into "-copy", which is a valid label, so
@@ -262,6 +262,14 @@ mod _conformance {
                 });
             }
             Self::new(format!("{other}-copy"))
+        }
+
+        /// An associated function that answers about the type rather
+        /// than constructing it: a plain `@staticmethod` returning a
+        /// string, not the object.
+        #[unibind(associated)]
+        pub fn describe(label: String) -> String {
+            format!("gate:{label}")
         }
 
         /// The label the gate was opened with.

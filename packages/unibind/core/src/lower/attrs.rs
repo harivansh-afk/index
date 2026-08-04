@@ -23,7 +23,7 @@ pub struct UnibindMeta {
     pub(crate) default: Option<ir::Literal>,
     pub(crate) resource: bool,
     pub(crate) constructor: bool,
-    pub(crate) factory: bool,
+    pub(crate) associated: bool,
     pub(crate) blocking: bool,
     pub(crate) backends: Option<Vec<Backend>>,
 }
@@ -133,11 +133,11 @@ impl UnibindMeta {
             }
             self.constructor = true;
         }
-        if other.factory {
-            if self.factory {
-                return Err(LowerError::new(span, "duplicate unibind `factory`"));
+        if other.associated {
+            if self.associated {
+                return Err(LowerError::new(span, "duplicate unibind `associated`"));
             }
-            self.factory = true;
+            self.associated = true;
         }
         if other.blocking {
             if self.blocking {
@@ -206,8 +206,8 @@ impl UnibindMeta {
                 &mut self.resource
             } else if path.is_ident("constructor") {
                 &mut self.constructor
-            } else if path.is_ident("factory") {
-                &mut self.factory
+            } else if path.is_ident("associated") {
+                &mut self.associated
             } else if path.is_ident("blocking") {
                 &mut self.blocking
             } else {
@@ -343,13 +343,14 @@ impl UnibindMeta {
         )
     }
 
-    /// Error out when a `factory` flag was given somewhere it cannot apply.
-    pub(crate) fn reject_factory(&self, context: &str) -> Result<()> {
+    /// Error out when an `associated` flag was given somewhere it cannot
+    /// apply.
+    pub(crate) fn reject_associated(&self, context: &str) -> Result<()> {
         self.reject_if(
-            self.factory,
+            self.associated,
             format!(
-                "`factory` applies to associated functions in an object impl \
-                 block, not {context}"
+                "`associated` applies to associated functions in an object \
+                 impl block, not {context}"
             ),
         )
     }
@@ -481,7 +482,7 @@ fn unknown_option(span: Span) -> LowerError {
         "unknown unibind option; expected py(name = \"...\"), \
          py(base = \"...\"), ts(name = \"...\"), ex(name = \"...\"), \
          jvm(name = \"...\"), jvm(base = \"...\"), backends(...), \
-         default = ..., resource, constructor, factory, or blocking",
+         default = ..., resource, constructor, associated, or blocking",
     )
 }
 

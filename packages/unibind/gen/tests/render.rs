@@ -238,7 +238,7 @@ fn sample_objects() -> Vec<ir::Object> {
         docs: docs(&["A stateful handle over one store."]),
         resource: false,
         constructor: Some(constructor),
-        factories: Vec::new(),
+        associated: Vec::new(),
         methods: vec![head, watch, cursor],
     };
 
@@ -267,7 +267,7 @@ fn sample_objects() -> Vec<ir::Object> {
         docs: docs(&["A resource over one store; instances come from `Store.cursor`."]),
         resource: true,
         constructor: None,
-        factories: Vec::new(),
+        associated: Vec::new(),
         methods: vec![read, close],
     };
 

@@ -60,19 +60,19 @@ fn lower_result(segment: &syn::PathSegment, declared: &Declared) -> Result<Retur
     })
 }
 
-/// A factory returns the object it constructs, spelled either `Self` or by
-/// name, optionally inside a `Result`. Unlike a constructor the IR keeps
-/// the type, since a factory is an ordinary callable whose return happens
-/// to be its own object, and the backends wrap it exactly as they wrap any
-/// other object-returning call. `Self` is resolved here rather than in the
-/// shared type lowering, which has no notion of an enclosing impl.
-pub(super) fn lower_factory_return(
+/// An associated function's return, with `Self` resolved to the object it
+/// is declared on. Everything else is the ordinary return lowering, so an
+/// associated function may hand back the object it constructs, a record, a
+/// list, or nothing. Which of those it is decides how a backend renders
+/// it: napi needs `factory` to build an instance and plain `#[napi]`
+/// otherwise, and the author never has to say which.
+pub(super) fn lower_associated_return(
     output: &syn::ReturnType,
     object: &str,
     declared: &Declared,
 ) -> Result<Returned> {
     let syn::ReturnType::Type(_, ty) = output else {
-        return Err(bad_factory(output.span(), object));
+        return lower_return(output, declared);
     };
     let named = ir::Type::Named(object.to_owned());
     if is_object(ty, object) {
@@ -86,16 +86,15 @@ pub(super) fn lower_factory_return(
         && segment.ident == "Result"
     {
         let parts = result_parts(segment)?;
-        if !is_object(parts.ok, object) {
-            return Err(bad_factory(parts.ok.span(), object));
+        if is_object(parts.ok, object) {
+            let throws = error_name(parts.error, declared)?;
+            return Ok(Returned {
+                ty: Some(named),
+                throws: Some(throws),
+            });
         }
-        let throws = error_name(parts.error, declared)?;
-        return Ok(Returned {
-            ty: Some(named),
-            throws: Some(throws),
-        });
     }
-    Err(bad_factory(ty.span(), object))
+    lower_return(output, declared)
 }
 
 /// A constructor returns the object (or `Result` of it): the IR leaves
@@ -227,16 +226,6 @@ fn is_object(ty: &syn::Type, object: &str) -> bool {
             .path
             .get_ident()
             .is_some_and(|ident| ident == "Self" || ident == object)
-}
-
-fn bad_factory(span: proc_macro2::Span, object: &str) -> LowerError {
-    LowerError::new(
-        span,
-        format!(
-            "a #[unibind(factory)] returns the object it constructs: \
-             `Self`, `{object}`, or a `Result` of one"
-        ),
-    )
 }
 
 fn bad_ctor(span: proc_macro2::Span, object: &str) -> LowerError {

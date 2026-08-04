@@ -10,7 +10,7 @@ use unibind_core::ir;
 use unibind_core::render::RenderError;
 
 use crate::ctx::Ctx;
-use crate::function::{doc_attrs, render_factory, render_method};
+use crate::function::{doc_attrs, render_associated, render_method};
 use crate::{resource, sig};
 
 pub fn render_object(object: &ir::Object, ctx: &Ctx<'_>) -> Result<TokenStream, RenderError> {
@@ -34,9 +34,9 @@ pub fn render_object(object: &ir::Object, ctx: &Ctx<'_>) -> Result<TokenStream, 
         .as_ref()
         .map(|ctor| render_constructor(ctor, object, ctx))
         .transpose()?;
-    let mut factories = Vec::new();
-    for factory in &object.factories {
-        factories.push(render_factory(factory, ctx, &object.name)?);
+    let mut associated = Vec::new();
+    for function in &object.associated {
+        associated.push(render_associated(function, ctx, &object.name)?);
     }
     let mut methods = Vec::new();
     for method in &object.methods {
@@ -71,7 +71,7 @@ pub fn render_object(object: &ir::Object, ctx: &Ctx<'_>) -> Result<TokenStream, 
         #[::pyo3::pymethods]
         impl #wrapper {
             #constructor
-            #(#factories)*
+            #(#associated)*
             #(#methods)*
             #resource_surface
         }

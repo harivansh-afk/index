@@ -421,17 +421,18 @@ mod conformance {
         /// Open a session after an async hop: the shape a constructor
         /// cannot take, since napi's `constructor` and Python's `__new__`
         /// are both synchronous. Renders as a static `Session.opened(...)`
-        /// returning a promise, and there may be several such factories on
+        /// returning a promise, and there may be several such functions on
         /// one object, each keeping its own name.
-        #[unibind(factory)]
+        #[unibind(associated)]
         pub async fn opened(name: String) -> Result<Self, ConformanceError> {
             tokio::time::sleep(Duration::from_millis(1)).await;
             Self::new(name)
         }
 
-        /// A sync factory beside the async one, so the two renderings are
-        /// covered and a second factory on the same object is proven.
-        #[unibind(factory)]
+        /// A sync one beside the async one, so the two renderings are
+        /// covered and a second associated function on the same object is
+        /// proven.
+        #[unibind(associated)]
         pub fn named_after(other: String) -> Result<Self, ConformanceError> {
             // Refuse here rather than leaning on `new`: `format!` would
             // turn an empty name into "-copy", which is a valid name, so
@@ -443,6 +444,17 @@ mod conformance {
                 ));
             }
             Self::new(format!("{other}-copy"))
+        }
+
+        /// An associated function that answers about the type rather
+        /// than constructing it. Returns a record, not the object, so it
+        /// renders as a plain static: marking this one a napi factory
+        /// would tell napi to build a Session out of a Badge.
+        #[unibind(associated)]
+        pub fn describe(name: String) -> Badge {
+            Badge {
+                label: format!("session:{name}"),
+            }
         }
 
         /// The session's name.

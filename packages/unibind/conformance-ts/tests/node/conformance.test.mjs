@@ -424,7 +424,7 @@ test("objects construct, expose methods, and close idempotently", async () => {
   assert.equal(api.closedSessions(), closedBaseline + 1, "second close is a no-op");
 });
 
-test("static factories construct the object, sync and async", async () => {
+test("associated functions: construct the object, and answer about it", async () => {
   const liveBaseline = api.liveSessions();
 
   // The shape a constructor cannot take: a static that awaits before it
@@ -452,6 +452,12 @@ test("static factories construct the object, sync and async", async () => {
     assert.equal(scoped.name(), "delta");
   }
   assert.equal(api.closedSessions(), closedBaseline + 1, "await using closed the factory's instance");
+
+  // An associated function that does not return the object renders as a
+  // plain static, not a napi factory.
+  const badge = api.Session.describe("epsilon");
+  assert.equal(badge.label, "session:epsilon");
+  assert.ok(!(badge instanceof api.Session), "a record return is not wrapped as the class");
 
   await opened.close();
   await copy.close();

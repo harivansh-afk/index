@@ -19,15 +19,18 @@ pub(super) enum Kind<'a> {
         /// The object type the constructor must return.
         object: &'a str,
     },
-    /// A named associated function that constructs the object, and may be
-    /// async. The shape a constructor cannot take: Python's `__new__` and
-    /// napi's `constructor` are both synchronous, so anything that has to
-    /// await before it can hand back an instance arrives here instead.
-    /// Unlike a constructor there may be several, and each keeps its own
-    /// name, so one object can offer `oci` beside `nixos`.
-    Factory {
-        /// The object the factory belongs to. Its return type is lowered
-        /// like any other, so it may name the object or `Self`.
+    /// A named function on the object rather than on an instance: no
+    /// receiver, may be async, and there may be several. Two shapes share
+    /// this kind because they differ only in what they return. One
+    /// constructs the object, which is what a constructor cannot do when it
+    /// has to await first, since Python's `__new__` and napi's
+    /// `constructor` are both synchronous. The other answers something
+    /// else about the type, `Machine.list()` being the case that forced it.
+    /// Which one a given function is falls out of its return type, so the
+    /// author never says it twice.
+    Associated {
+        /// The object it belongs to, which resolves a `Self` return and
+        /// scopes per-export stream classes.
         object: &'a str,
     },
 }
@@ -38,7 +41,7 @@ impl Kind<'_> {
             Self::Free => "a function",
             Self::Method => "a method",
             Self::Constructor { .. } => "a constructor",
-            Self::Factory { .. } => "a factory",
+            Self::Associated { .. } => "an associated function",
         }
     }
 }
@@ -106,7 +109,7 @@ pub(super) fn lower_callable(callable: Callable<'_>) -> Result<ir::Function> {
                 return Err(LowerError::new(
                     token.span(),
                     "Python constructors are synchronous; mark this \
-                     #[unibind(factory)] instead, which may be async and \
+                     #[unibind(associated)] instead, which may be async and \
                      keeps its own name",
                 ));
             }
@@ -122,20 +125,20 @@ pub(super) fn lower_callable(callable: Callable<'_>) -> Result<ir::Function> {
     meta.reject_backends(kind.context())?;
     meta.reject_resource(kind.context())?;
     match kind {
-        // A `constructor` or `factory` flag routed the signature here
+        // A `constructor` or `associated` flag routed the signature here
         // already, so only the other kinds can carry one by mistake.
         Kind::Free | Kind::Method => {
             meta.reject_constructor(kind.context())?;
-            meta.reject_factory(kind.context())?;
+            meta.reject_associated(kind.context())?;
         }
         Kind::Constructor { .. } => {
-            meta.reject_factory(kind.context())?;
+            meta.reject_associated(kind.context())?;
             meta.reject_blocking(kind.context())?;
         }
-        // A factory is an ordinary callable that happens to return the
-        // object, so `blocking` applies to it exactly as it does to a
-        // method.
-        Kind::Factory { .. } => meta.reject_constructor(kind.context())?,
+        // An associated function is an ordinary callable that happens to
+        // hang off the type, so `blocking` applies to it exactly as it
+        // does to a method.
+        Kind::Associated { .. } => meta.reject_constructor(kind.context())?,
     }
     let blocking = meta.blocking;
     if blocking && matches!(asyncness, ir::Asyncness::Async) {
@@ -186,12 +189,12 @@ pub(super) fn lower_callable(callable: Callable<'_>) -> Result<ir::Function> {
         Kind::Constructor { object } => {
             ret::lower_ctor_return(&signature.output, object, declared)?
         }
-        // A factory returns its own object, so `Self` resolves here where
-        // the enclosing impl is known. The IR keeps the type, unlike a
-        // constructor's implied one, so the backends wrap it exactly as
-        // they wrap any other object-returning call.
-        Kind::Factory { object } => {
-            ret::lower_factory_return(&signature.output, object, declared)?
+        // `Self` resolves here, where the enclosing impl is known; the
+        // shared type lowering has no notion of one. Everything else falls
+        // through to the ordinary path, so an associated function may
+        // return the object, a record, a list, or nothing at all.
+        Kind::Associated { object } => {
+            ret::lower_associated_return(&signature.output, object, declared)?
         }
         Kind::Free | Kind::Method => ret::lower_return(&signature.output, declared)?,
     };
