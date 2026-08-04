@@ -29,15 +29,40 @@ Rust with braces is a defect, and so is a `.pyi` that reads like TypeScript.
 
 ## Intent table
 
-| Intent | Rust | TypeScript | Python | JVM | Elixir |
+| Intent | Rust | TypeScript | Python | Kotlin | Elixir |
 |---|---|---|---|---|---|
-| construct, async | associated `async fn` returning `Self` | `static oci(): Promise<Machine>` | `@staticmethod async def oci() -> Machine` | static method returning a future | `Machine.oci(...) -> {:ok, machine}` |
-| release at scope end | `object(resource)` + `close` | `Symbol.asyncDispose`, so `await using` | `__aenter__`/`__aexit__`, so `async with` | `AutoCloseable`, so try-with-resources | nothing; the BEAM drops the `ResourceArc`, or take a function |
-| closed variant set | `enum Status { Running, .. }` | `'running' \| 'stopped'` | `StrEnum` / `Literal` | `enum` | atoms |
-| variants with data | `enum Frame { Phase{..}, Done{..} }` | discriminated union, exhaustive `switch` | frozen dataclasses under a `Literal` tag, `match` | sealed interface over records | tagged tuples, `case` |
-| identity | `MachineId(Uuid)` | branded string | `NewType` | record wrapper | opaque type |
-| sequence | `UniStream<T>` | `AsyncIterable` | `__aiter__`/`__anext__` | iterator | `Stream` |
-| failure | error enum | error subclasses | exception hierarchy | checked exceptions | `{:error, reason}` |
+| construct, async | associated `async fn` returning `Self` | `static oci(): Promise<Machine>` | `@staticmethod async def oci() -> Machine` | `suspend fun` in a `companion object` | `Machine.oci(...) -> {:ok, machine}` |
+| release at scope end | `object(resource)` + `close` | `Symbol.asyncDispose`, so `await using` | `__aenter__`/`__aexit__`, so `async with` | `AutoCloseable`, so `use { }` | nothing; the BEAM drops the `ResourceArc`, or take a function |
+| closed variant set | `enum Status { Running, .. }` | `'running' \| 'stopped'` | `StrEnum` / `Literal` | `enum class` | atoms |
+| variants with data | `enum Frame { Phase{..}, Done{..} }` | discriminated union, exhaustive `switch` | frozen dataclasses under a `Literal` tag, `match` | sealed interface over data classes, exhaustive `when` | tagged tuples, `case` |
+| identity | `MachineId(Uuid)` | branded string | `NewType` | `@JvmInline value class` | opaque type |
+| optionality | `Option<T>` | `T \| null` | `T \| None` | `T?`, checked by the compiler | `nil` |
+| sequence | `UniStream<T>` | `AsyncIterable` | `__aiter__`/`__anext__` | `Flow<T>` | `Stream` |
+| failure | error enum | error subclasses | exception hierarchy | sealed exception hierarchy | `{:error, reason}` |
+
+Kotlin's async row is not just `suspend fun`. Structured concurrency is the
+contract: a cancelled coroutine must abort the Rust future rather than
+leaving it running, so a suspending binding is written with
+`suspendCancellableCoroutine` plus `invokeOnCancellation`, which is the
+Kotlin end of the same abort path the TypeScript backend drives from an
+`AbortSignal`. Streams are `Flow`, which is cold, cancellable and
+backpressured by construction, so it carries the same contract without a
+second mechanism. Scope-bound release is `use { }` on `AutoCloseable`, the
+`with` of that language. Get those three right and a generated Kotlin SDK
+composes with `coroutineScope` the way a hand-written one would; get them
+wrong and every caller leaks a Rust task on the first cancellation.
+
+The JVM column says Kotlin, not Java, and that is a decision rather than a
+preference. Java has no answer for the async row at all, which is why the
+backend's own rejection message tells the caller to block on a runtime and
+move the call to a virtual thread. Kotlin answers every row natively. The
+evidence that settled it: the only consumer of the JVM backend in either
+repo is `index/packages/minecraft/probe-kt`, which is Kotlin, and whose
+header describes what it consumes as "the unibind-rendered **Java** class".
+We generated Java for a Kotlin caller. `index/lib/languages/kotlin.nix`
+already builds that probe with `-Werror`, so the toolchain is in place, and
+the backend is the least-built of the four, so re-basing it costs less now
+than it ever will again.
 
 Elixir keeps the table honest. It has no classes to hang a static method on and
 no scope-bound cleanup at all, so any IR concept that survives contact with
@@ -70,10 +95,19 @@ Do not promise a surface a backend cannot render. As of 2026-08-04:
 |---|---|---|---|---|
 | objects | yes | yes | **rejected outright** (`backend-jvm/src/module.rs`), no handle registry | yes, as `ResourceArc` handles |
 | async | yes | yes | **rejected outright** (`backend-jvm/src/function.rs`) | free functions only; object members rejected (`backend-ex/src/object.rs`) |
+| static factory | yes, `#[napi(factory)]` | yes, `#[staticmethod]` | no | no |
 | resource close | `close()` + leak warning | `close` + `__aenter__`/`__aexit__` + `ResourceWarning` | none | flag ignored; the BEAM drop runs `Drop` |
-| `await using` / dispose | **not emitted**; napi-rs has no attribute for it, so it belongs in the generated JS wrapper | n/a (`async with` covers it) | none | n/a |
+| scope-bound release | `[Symbol.asyncDispose]` in the generated JS wrapper, so `await using` works | `async with` | none | n/a |
 | data enums | **rejected** (`backend-ts/src/module.rs`) | **rejected** (`backend-py/src/module.rs`) | no | no |
+| runtime validation | Zod schemas, `z.infer` types | **none**; Pydantic models are the gap | no | no |
 | error enums | yes | yes | yes | yes |
+
+Two notes on that table. napi-rs itself cannot codegen `Symbol.asyncDispose`
+and has no attribute for it, but unibind emits its own JS wrapper class over
+the napi addon, and that is where dispose is written, so `await using` works
+today. And the Zod row is the model for the Python gap: TypeScript consumers
+get runtime validation generated from the same IR that types them, Python
+consumers get none.
 
 So the shipped ix SDKs are TypeScript and Python. The JVM and Elixir backends
 serve other unibind consumers, and their gaps are stated in their own rejection
