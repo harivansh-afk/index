@@ -582,7 +582,7 @@ fn returned_object(name: &str, doc: &str, methods: Vec<ir::Function>) -> ir::Obj
 }
 
 /// An object whose methods stream and hand back another object: the shapes
-/// the ix SDK's `VmHandle` and `client.keys().create(...)` need. Kept off
+/// the ix SDK's `Machine` and `client.keys().create(...)` need. Kept off
 /// the shared fixture so these tests state their rule instead of restating
 /// a snapshot.
 fn namespaced_interface() -> ir::Interface {
