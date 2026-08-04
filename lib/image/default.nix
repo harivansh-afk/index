@@ -43,6 +43,11 @@
       `examples/nomad/cluster` fleet runs it as a demo scheduler, squarely
       inside the license's non-competing production grant.
       Refs: https://www.hashicorp.com/license-faq
+    - `minecraft-server`: Mojang's EULA-bound server jar. The SDK's
+      declarative example (ix packages/sdk/examples/nixos) boots it via
+      `services.minecraft-server` with `eula = true` in the same config,
+      so acceptance is explicit where the exception is used.
+      Refs: https://www.minecraft.net/eula
   The predicate keeps every other unfree (Oracle JDK, Adobe runtimes,
   NVIDIA blobs) failing at eval until the platform allows it explicitly.
   */
@@ -53,6 +58,7 @@
         builtins.elem (lib.getName pkg) [
           "yourkit-java"
           "claude-code"
+          "minecraft-server"
           "nomad"
         ];
     };
