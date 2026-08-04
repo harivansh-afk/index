@@ -60,6 +60,44 @@ fn lower_result(segment: &syn::PathSegment, declared: &Declared) -> Result<Retur
     })
 }
 
+/// A factory returns the object it constructs, spelled either `Self` or by
+/// name, optionally inside a `Result`. Unlike a constructor the IR keeps
+/// the type, since a factory is an ordinary callable whose return happens
+/// to be its own object, and the backends wrap it exactly as they wrap any
+/// other object-returning call. `Self` is resolved here rather than in the
+/// shared type lowering, which has no notion of an enclosing impl.
+pub(super) fn lower_factory_return(
+    output: &syn::ReturnType,
+    object: &str,
+    declared: &Declared,
+) -> Result<Returned> {
+    let syn::ReturnType::Type(_, ty) = output else {
+        return Err(bad_factory(output.span(), object));
+    };
+    let named = ir::Type::Named(object.to_owned());
+    if is_object(ty, object) {
+        return Ok(Returned {
+            ty: Some(named),
+            throws: None,
+        });
+    }
+    if let syn::Type::Path(path) = &**ty
+        && let Some(segment) = path.path.segments.last()
+        && segment.ident == "Result"
+    {
+        let parts = result_parts(segment)?;
+        if !is_object(parts.ok, object) {
+            return Err(bad_factory(parts.ok.span(), object));
+        }
+        let throws = error_name(parts.error, declared)?;
+        return Ok(Returned {
+            ty: Some(named),
+            throws: Some(throws),
+        });
+    }
+    Err(bad_factory(ty.span(), object))
+}
+
 /// A constructor returns the object (or `Result` of it): the IR leaves
 /// `ret` empty because the object itself is implied.
 pub(super) fn lower_ctor_return(
@@ -189,6 +227,16 @@ fn is_object(ty: &syn::Type, object: &str) -> bool {
             .path
             .get_ident()
             .is_some_and(|ident| ident == "Self" || ident == object)
+}
+
+fn bad_factory(span: proc_macro2::Span, object: &str) -> LowerError {
+    LowerError::new(
+        span,
+        format!(
+            "a #[unibind(factory)] returns the object it constructs: \
+             `Self`, `{object}`, or a `Result` of one"
+        ),
+    )
 }
 
 fn bad_ctor(span: proc_macro2::Span, object: &str) -> LowerError {

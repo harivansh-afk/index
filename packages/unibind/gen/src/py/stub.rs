@@ -92,7 +92,13 @@ fn needs_os_import(interface: &ir::Interface) -> bool {
     let object_args = interface
         .objects
         .iter()
-        .flat_map(|object| object.constructor.iter().chain(object.methods.iter()))
+        .flat_map(|object| {
+            object
+                .constructor
+                .iter()
+                .chain(object.factories.iter())
+                .chain(object.methods.iter())
+        })
         .flat_map(|function| function.args.iter())
         .map(|arg| &arg.ty);
     function_args
@@ -232,6 +238,12 @@ fn object_class(interface: &ir::Interface, object: &ir::Object) -> String {
     if let Some(ctor) = &object.constructor {
         members.push(constructor_def(interface, ctor));
     }
+    for factory in &object.factories {
+        let receiver = Receiver::Factory {
+            object: &object.name,
+        };
+        members.push(callable_def(interface, factory, &receiver));
+    }
     let close = resource_close(object);
     for method in &object.methods {
         // The resource surface owns `close`; the backend skips the generic
@@ -334,6 +346,9 @@ fn stream_class(interface: &ir::Interface, export: &StreamExport<'_>) -> String 
 enum Receiver<'a> {
     Free,
     Method { object: &'a str },
+    /// A `@staticmethod` on `object`: indented like a method, but with no
+    /// `self` parameter, since it runs before an instance exists.
+    Factory { object: &'a str },
 }
 
 /// A function or method stub: literal defaults, `None` for undefaulted
@@ -348,11 +363,11 @@ fn callable_def(
 ) -> String {
     let (indent, owner) = match receiver {
         Receiver::Free => (0, None),
-        Receiver::Method { object } => (1, Some(*object)),
+        Receiver::Method { object } | Receiver::Factory { object } => (1, Some(*object)),
     };
     let name = types::py_name(&function.names, &function.name);
     let mut params = Vec::new();
-    if owner.is_some() {
+    if matches!(receiver, Receiver::Method { .. }) {
         params.push("self".to_owned());
     }
     params.extend(function.args.iter().map(|arg| parameter(interface, arg)));
@@ -365,7 +380,11 @@ fn callable_def(
     };
     let def = def_keyword(function.asyncness);
     let pad = "    ".repeat(indent);
-    let header = format!("{pad}{def} {name}({}) -> {ret}:", params.join(", "));
+    let decorator = match receiver {
+        Receiver::Factory { .. } => format!("{pad}@staticmethod\n"),
+        Receiver::Free | Receiver::Method { .. } => String::new(),
+    };
+    let header = format!("{decorator}{pad}{def} {name}({}) -> {ret}:", params.join(", "));
     def_block(&header, &doc_lines_with_raises(interface, function), indent)
 }
 

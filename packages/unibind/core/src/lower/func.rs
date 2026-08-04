@@ -19,6 +19,17 @@ pub(super) enum Kind<'a> {
         /// The object type the constructor must return.
         object: &'a str,
     },
+    /// A named associated function that constructs the object, and may be
+    /// async. The shape a constructor cannot take: Python's `__new__` and
+    /// napi's `constructor` are both synchronous, so anything that has to
+    /// await before it can hand back an instance arrives here instead.
+    /// Unlike a constructor there may be several, and each keeps its own
+    /// name, so one object can offer `oci` beside `nixos`.
+    Factory {
+        /// The object the factory belongs to. Its return type is lowered
+        /// like any other, so it may name the object or `Self`.
+        object: &'a str,
+    },
 }
 
 impl Kind<'_> {
@@ -27,6 +38,7 @@ impl Kind<'_> {
             Self::Free => "a function",
             Self::Method => "a method",
             Self::Constructor { .. } => "a constructor",
+            Self::Factory { .. } => "a factory",
         }
     }
 }
@@ -93,8 +105,9 @@ pub(super) fn lower_callable(callable: Callable<'_>) -> Result<ir::Function> {
             if matches!(kind, Kind::Constructor { .. }) {
                 return Err(LowerError::new(
                     token.span(),
-                    "Python constructors are synchronous; expose an async \
-                     factory function instead",
+                    "Python constructors are synchronous; mark this \
+                     #[unibind(factory)] instead, which may be async and \
+                     keeps its own name",
                 ));
             }
             ir::Asyncness::Async
@@ -109,10 +122,20 @@ pub(super) fn lower_callable(callable: Callable<'_>) -> Result<ir::Function> {
     meta.reject_backends(kind.context())?;
     meta.reject_resource(kind.context())?;
     match kind {
-        // A `constructor` flag routed the signature here already, so only
-        // the other kinds can carry it by mistake.
-        Kind::Free | Kind::Method => meta.reject_constructor(kind.context())?,
-        Kind::Constructor { .. } => meta.reject_blocking(kind.context())?,
+        // A `constructor` or `factory` flag routed the signature here
+        // already, so only the other kinds can carry one by mistake.
+        Kind::Free | Kind::Method => {
+            meta.reject_constructor(kind.context())?;
+            meta.reject_factory(kind.context())?;
+        }
+        Kind::Constructor { .. } => {
+            meta.reject_factory(kind.context())?;
+            meta.reject_blocking(kind.context())?;
+        }
+        // A factory is an ordinary callable that happens to return the
+        // object, so `blocking` applies to it exactly as it does to a
+        // method.
+        Kind::Factory { .. } => meta.reject_constructor(kind.context())?,
     }
     let blocking = meta.blocking;
     if blocking && matches!(asyncness, ir::Asyncness::Async) {
@@ -162,6 +185,13 @@ pub(super) fn lower_callable(callable: Callable<'_>) -> Result<ir::Function> {
     let returned = match kind {
         Kind::Constructor { object } => {
             ret::lower_ctor_return(&signature.output, object, declared)?
+        }
+        // A factory returns its own object, so `Self` resolves here where
+        // the enclosing impl is known. The IR keeps the type, unlike a
+        // constructor's implied one, so the backends wrap it exactly as
+        // they wrap any other object-returning call.
+        Kind::Factory { object } => {
+            ret::lower_factory_return(&signature.output, object, declared)?
         }
         Kind::Free | Kind::Method => ret::lower_return(&signature.output, declared)?,
     };

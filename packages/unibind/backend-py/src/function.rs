@@ -22,13 +22,23 @@ enum Target<'a> {
         /// classes.
         object: &'a str,
     },
+    /// A `#[unibind(factory)]` associated function:
+    /// `super::<user>::<Object>::<name>(...)`, rendered as a
+    /// `@staticmethod`. It takes no receiver because it is what runs
+    /// before an instance exists, and it may be async, which is the shape
+    /// `__new__` cannot take.
+    Factory {
+        /// The owning object's Rust name, which both spells the call and
+        /// scopes per-export stream classes.
+        object: &'a str,
+    },
 }
 
 impl Target<'_> {
     const fn owner(&self) -> Option<&str> {
         match self {
             Self::Free => None,
-            Self::Method { object } => Some(object),
+            Self::Method { object } | Self::Factory { object } => Some(object),
         }
     }
 
@@ -41,6 +51,10 @@ impl Target<'_> {
         match self {
             Self::Free => quote!(super::#user::#name(#(#forwarded),*)),
             Self::Method { .. } => quote!(self.inner.#name(#(#forwarded),*)),
+            Self::Factory { object } => {
+                let object = Ident::new(object, Span::call_site());
+                quote!(super::#user::#object::#name(#(#forwarded),*))
+            }
         }
     }
 
@@ -55,6 +69,10 @@ impl Target<'_> {
         match self {
             Self::Free => quote!(super::#user::#name(#(#forwarded),*)),
             Self::Method { .. } => quote!(inner.#name(#(#forwarded),*)),
+            Self::Factory { object } => {
+                let object = Ident::new(object, Span::call_site());
+                quote!(super::#user::#object::#name(#(#forwarded),*))
+            }
         }
     }
 }
@@ -101,6 +119,19 @@ pub fn render_method(
     render_callable(function, ctx, &Target::Method { object })
 }
 
+/// A `#[unibind(factory)]` associated function, as a `@staticmethod`.
+///
+/// # Errors
+///
+/// Fails for the same type surface any callable refuses.
+pub fn render_factory(
+    function: &ir::Function,
+    ctx: &Ctx<'_>,
+    object: &str,
+) -> Result<TokenStream, RenderError> {
+    render_callable(function, ctx, &Target::Factory { object })
+}
+
 fn render_callable(
     function: &ir::Function,
     ctx: &Ctx<'_>,
@@ -114,6 +145,9 @@ fn render_callable(
     let args = sig::lower_args(function, ctx)?;
     let ret = sig::ret_spec(function, target.owner(), ctx);
     let pyfunction = matches!(target, Target::Free).then(|| quote!(#[::pyo3::pyfunction]));
+    // pyo3 composes `staticmethod` with an async fn, which is what makes a
+    // factory expressible where `#[new]` is not.
+    let staticmethod = matches!(target, Target::Factory { .. }).then(|| quote!(#[staticmethod]));
     let entries = &args.signature;
     let parts = ItemParts {
         function,
@@ -130,6 +164,7 @@ fn render_callable(
     Ok(quote! {
         #docs
         #pyfunction
+        #staticmethod
         #rename
         #[pyo3(signature = (#(#entries),*))]
         #item

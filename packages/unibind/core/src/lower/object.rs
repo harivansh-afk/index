@@ -28,6 +28,7 @@ struct ImplBlock {
     /// Points a merge failure at the `impl` block's self type.
     span: Span,
     constructor: Option<SpannedFn>,
+    factories: Vec<ir::Function>,
     methods: Vec<ir::Function>,
 }
 
@@ -69,6 +70,7 @@ impl Objects {
                 docs: marker::doc_lines(&item.attrs),
                 resource: found.meta.resource,
                 constructor: None,
+                factories: Vec::new(),
                 methods: Vec::new(),
             },
             span: item.ident.span(),
@@ -103,6 +105,7 @@ impl Objects {
             name,
             span: item.self_ty.span(),
             constructor: None,
+            factories: Vec::new(),
             methods: Vec::new(),
         };
         for impl_item in &item.items {
@@ -145,6 +148,7 @@ impl Objects {
                 ));
             };
             declaration.object.methods.extend(block.methods);
+            declaration.object.factories.extend(block.factories);
             if let Some(constructor) = block.constructor {
                 if declaration.object.constructor.is_some() {
                     return Err(LowerError::new(
@@ -185,11 +189,21 @@ impl ImplBlock {
             return Ok(());
         }
         let meta = attrs::UnibindMeta::from_attrs(&method.attrs)?;
+        if meta.factory {
+            self.factories.push(func::lower_callable(func::Callable {
+                attributes: &method.attrs,
+                signature: &method.sig,
+                declared,
+                kind: func::Kind::Factory { object: &self.name },
+            })?);
+            return Ok(());
+        }
         if !meta.constructor {
             return Err(LowerError::new(
                 method.sig.ident.span(),
-                "associated functions do not cross the boundary; mark the \
-                 constructor with #[unibind(constructor)] or take &self",
+                "associated functions do not cross the boundary; mark a \
+                 constructor with #[unibind(constructor)], an async or \
+                 named one with #[unibind(factory)], or take &self",
             ));
         }
         if self.constructor.is_some() {

@@ -248,6 +248,15 @@ fn object_class(out: &mut String, interface: &ir::Interface, object: &ir::Object
         .expect("write to string");
         out.push_str("    }\n    this.#handle = args[1];\n  }\n");
     }
+    for factory in &object.factories {
+        factory_delegation(
+            out,
+            interface,
+            factory,
+            &class,
+            &value_name(&factory.name, &factory.names),
+        );
+    }
     let close = resource_close(object);
     for method in &object.methods {
         if close.is_some_and(|close| std::ptr::eq(close, method)) {
@@ -268,6 +277,35 @@ fn object_class(out: &mut String, interface: &ir::Interface, object: &ir::Object
         out.push_str("  async [Symbol.asyncDispose]() {\n    await this.close();\n  }\n");
     }
     out.push_str("}\n\n");
+}
+
+/// One delegating static factory. Unlike a method it calls through the
+/// native class rather than an instance handle, because the instance is
+/// what it returns; the returned native handle is wrapped into this
+/// wrapper class the same way any object-returning call's is.
+fn factory_delegation(
+    out: &mut String,
+    interface: &ir::Interface,
+    factory: &ir::Function,
+    class: &str,
+    name: &str,
+) {
+    out.push('\n');
+    doc_block(out, "  ", &factory.docs);
+    let is_async = matches!(factory.asyncness, ir::Asyncness::Async);
+    let call = if is_async {
+        format!("await native.{class}.{name}(...args.map(normalizeArg))")
+    } else {
+        format!("native.{class}.{name}(...args.map(normalizeArg))")
+    };
+    let value = returned_value(interface, factory, call);
+    if is_async {
+        writeln!(out, "  static async {name}(...args) {{\n    try {{").expect("write to string");
+    } else {
+        writeln!(out, "  static {name}(...args) {{\n    try {{").expect("write to string");
+    }
+    writeln!(out, "      return {value};").expect("write to string");
+    out.push_str("    } catch (error) {\n      throw decodeError(error);\n    }\n  }\n");
 }
 
 /// One delegating method: forward the positional arguments (async methods

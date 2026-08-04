@@ -274,6 +274,7 @@ fn sample_objects() -> Vec<ir::Object> {
         docs: docs(&["A counter resource."]),
         resource: true,
         constructor: Some(constructor),
+        factories: Vec::new(),
         methods: vec![value, add, watch, tail, fork, close],
     }]
 }
@@ -577,6 +578,7 @@ fn returned_object(name: &str, doc: &str, methods: Vec<ir::Function>) -> ir::Obj
         docs: docs(&[doc]),
         resource: false,
         constructor: None,
+        factories: Vec::new(),
         methods,
     }
 }

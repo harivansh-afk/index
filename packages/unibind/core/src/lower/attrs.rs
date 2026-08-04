@@ -23,6 +23,7 @@ pub struct UnibindMeta {
     pub(crate) default: Option<ir::Literal>,
     pub(crate) resource: bool,
     pub(crate) constructor: bool,
+    pub(crate) factory: bool,
     pub(crate) blocking: bool,
     pub(crate) backends: Option<Vec<Backend>>,
 }
@@ -132,6 +133,12 @@ impl UnibindMeta {
             }
             self.constructor = true;
         }
+        if other.factory {
+            if self.factory {
+                return Err(LowerError::new(span, "duplicate unibind `factory`"));
+            }
+            self.factory = true;
+        }
         if other.blocking {
             if self.blocking {
                 return Err(LowerError::new(span, "duplicate unibind `blocking`"));
@@ -199,6 +206,8 @@ impl UnibindMeta {
                 &mut self.resource
             } else if path.is_ident("constructor") {
                 &mut self.constructor
+            } else if path.is_ident("factory") {
+                &mut self.factory
             } else if path.is_ident("blocking") {
                 &mut self.blocking
             } else {
@@ -334,6 +343,17 @@ impl UnibindMeta {
         )
     }
 
+    /// Error out when a `factory` flag was given somewhere it cannot apply.
+    pub(crate) fn reject_factory(&self, context: &str) -> Result<()> {
+        self.reject_if(
+            self.factory,
+            format!(
+                "`factory` applies to associated functions in an object impl \
+                 block, not {context}"
+            ),
+        )
+    }
+
     /// Error out when a `constructor` flag was given somewhere it cannot
     /// apply.
     pub(crate) fn reject_constructor(&self, context: &str) -> Result<()> {
@@ -461,7 +481,7 @@ fn unknown_option(span: Span) -> LowerError {
         "unknown unibind option; expected py(name = \"...\"), \
          py(base = \"...\"), ts(name = \"...\"), ex(name = \"...\"), \
          jvm(name = \"...\"), jvm(base = \"...\"), backends(...), \
-         default = ..., resource, constructor, or blocking",
+         default = ..., resource, constructor, factory, or blocking",
     )
 }
 

@@ -105,11 +105,11 @@ pub fn render(interface: &ir::Interface) -> Result<RenderedInterface, RenderErro
 /// `AbortSignal` bridge.
 fn needs_signal(interface: &ir::Interface) -> bool {
     let fns = interface.functions.iter();
-    let methods = interface
+    let members = interface
         .objects
         .iter()
-        .flat_map(|object| object.methods.iter());
-    fns.chain(methods)
+        .flat_map(|object| object.methods.iter().chain(object.factories.iter()));
+    fns.chain(members)
         .any(|function| matches!(function.asyncness, ir::Asyncness::Async))
 }
 

@@ -418,6 +418,33 @@ mod conformance {
             })
         }
 
+        /// Open a session after an async hop: the shape a constructor
+        /// cannot take, since napi's `constructor` and Python's `__new__`
+        /// are both synchronous. Renders as a static `Session.opened(...)`
+        /// returning a promise, and there may be several such factories on
+        /// one object, each keeping its own name.
+        #[unibind(factory)]
+        pub async fn opened(name: String) -> Result<Self, ConformanceError> {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            Self::new(name)
+        }
+
+        /// A sync factory beside the async one, so the two renderings are
+        /// covered and a second factory on the same object is proven.
+        #[unibind(factory)]
+        pub fn named_after(other: String) -> Result<Self, ConformanceError> {
+            // Refuse here rather than leaning on `new`: `format!` would
+            // turn an empty name into "-copy", which is a valid name, so
+            // the error assertion in the conformance test would pass
+            // against a call that never failed.
+            if other.is_empty() {
+                return Err(ConformanceError::BadQuery(
+                    "session name must not be empty".to_owned(),
+                ));
+            }
+            Self::new(format!("{other}-copy"))
+        }
+
         /// The session's name.
         pub fn name(&self) -> String {
             self.name.clone()

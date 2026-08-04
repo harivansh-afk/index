@@ -140,6 +140,15 @@ fn object_decl(
         out.push_str("  /** Instances come from the exported functions returning this type. */\n");
         out.push_str("  private constructor();\n");
     }
+    for factory in &object.factories {
+        doc_block(out, "  ", &factory.docs);
+        writeln!(
+            out,
+            "  static {};",
+            callable_signature(interface, factory)?
+        )
+        .expect("write to string");
+    }
     let close = resource_close(object);
     for method in &object.methods {
         if close.is_some_and(|close| std::ptr::eq(close, method)) {

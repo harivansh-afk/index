@@ -41,6 +41,11 @@ pub fn render_object(object: &ir::Object, ctx: &TyCtx<'_>) -> Result<TokenStream
         .map(|ctor| render_constructor(ctor, object, ctx))
         .transpose()?;
 
+    let mut factories = Vec::new();
+    for factory in &object.factories {
+        factories.push(render_factory(factory, object, ctx)?);
+    }
+
     let mut methods = Vec::new();
     for method in &object.methods {
         // The resource surface owns `close`: the generic path would render
@@ -77,6 +82,7 @@ pub fn render_object(object: &ir::Object, ctx: &TyCtx<'_>) -> Result<TokenStream
         #[::napi_derive::napi]
         impl #handle {
             #constructor
+            #(#factories)*
             #(#methods)*
             #resource_surface
         }
@@ -108,6 +114,43 @@ fn render_method(
         },
     };
     render_callable(method, ctx, &wrapper, &call, Callee::Method { object })
+}
+
+/// A `#[unibind(factory)]` associated function, rendered as a napi static.
+///
+/// `#[napi(factory)]` is the one napi shape that may be async and still
+/// hand back an instance, which is why a factory exists at all: a
+/// constructor cannot await. The user's function returns the object type
+/// itself, so the returned value is wrapped into the handle exactly as a
+/// constructor's is; the shared callable path does the rest, including the
+/// error mapping and the `Result` shape.
+fn render_factory(
+    factory: &ir::Function,
+    object: &ir::Object,
+    ctx: &TyCtx<'_>,
+) -> Result<TokenStream, RenderError> {
+    let user = ctx.user;
+    let object_ident = name_ident(&object.name)?;
+    let factory_name = name_ident(&factory.name)?;
+    let wrapper = wrapper_parts(factory, ctx)?;
+    let exprs = &wrapper.exprs;
+    // No receiver to clone into the future: an associated function owns
+    // its arguments and the object does not exist yet.
+    let call = match factory.asyncness {
+        ir::Asyncness::Sync => quote!(#user::#object_ident::#factory_name(#(#exprs),*)),
+        ir::Asyncness::Async => quote! {
+            async move { #user::#object_ident::#factory_name(#(#exprs),*).await }
+        },
+    };
+    render_callable(
+        factory,
+        ctx,
+        &wrapper,
+        &call,
+        Callee::Factory {
+            object: &object.name,
+        },
+    )
 }
 
 /// The napi constructor over the user's `#[unibind(constructor)]` function.

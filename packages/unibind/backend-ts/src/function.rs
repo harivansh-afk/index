@@ -16,19 +16,25 @@ pub enum Callee<'a> {
     Free,
     /// A method on `object`, whose name scopes the per-export stream class.
     Method { object: &'a str },
+    /// A named associated function on `object` that constructs it. No
+    /// receiver, but it still scopes stream classes by the object, and it
+    /// renders as a static method rather than an instance one.
+    Factory { object: &'a str },
 }
 
 impl<'a> Callee<'a> {
     const fn owner(self) -> Option<&'a str> {
         match self {
             Self::Free => None,
-            Self::Method { object } => Some(object),
+            Self::Method { object } | Self::Factory { object } => Some(object),
         }
     }
 
     fn receiver(self) -> TokenStream {
         match self {
-            Self::Free => TokenStream::new(),
+            // A factory takes no receiver: it is what runs before an
+            // instance exists.
+            Self::Free | Self::Factory { .. } => TokenStream::new(),
             Self::Method { .. } => quote!(&self,),
         }
     }
@@ -140,7 +146,10 @@ pub fn render_callable(
         ty::check(ret, &format!("the return type of `{}`", function.name))?;
     }
     let name = name_ident(&function.name)?;
-    let napi_attr = napi_attr(function.names.ts.as_deref());
+    let napi_attr = match callee {
+        Callee::Free | Callee::Method { .. } => napi_attr(function.names.ts.as_deref()),
+        Callee::Factory { .. } => factory_attr(function.names.ts.as_deref()),
+    };
     let docs = doc_attrs(&function.docs);
     let params = &wrapper.params;
     // A stream return crosses as the generated per-export handle class;
@@ -312,5 +321,17 @@ pub fn napi_attr(ts_name: Option<&str>) -> TokenStream {
     ts_name.map_or_else(
         || quote!(#[::napi_derive::napi]),
         |js_name| quote!(#[::napi_derive::napi(js_name = #js_name)]),
+    )
+}
+
+/// The `#[napi(factory)]` marker. napi renders a receiver-less associated
+/// function returning `Self` as a static method on the class, and unlike
+/// `constructor` it accepts an async one, which is the whole reason a
+/// factory exists: `Machine.oci(...)` has to await before it has an
+/// instance to hand back.
+fn factory_attr(ts_name: Option<&str>) -> TokenStream {
+    ts_name.map_or_else(
+        || quote!(#[::napi_derive::napi(factory)]),
+        |js_name| quote!(#[::napi_derive::napi(factory, js_name = #js_name)]),
     )
 }

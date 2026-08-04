@@ -262,12 +262,54 @@ async def case_panic_containment() -> str:
     return f"sync panic -> {sync_name}, async panic -> {async_name}; interpreter still live"
 
 
+async def case_static_factory() -> str:
+    """Static factories construct the object, sync and async, and stay resources."""
+    closed_base = conf.closed_gates()
+
+    # The shape `__new__` cannot take: a static that awaits before it has
+    # an instance to hand back.
+    opened = await conf.Gate.opened("gamma")
+    assert isinstance(opened, conf.Gate), f"async factory returned {type(opened)!r}"
+    assert opened.label() == "gamma"
+    assert opened.is_open()
+
+    # A second factory on the same object, sync this time.
+    copy = conf.Gate.named_after("gamma")
+    assert isinstance(copy, conf.Gate), f"sync factory returned {type(copy)!r}"
+    assert copy.label() == "gamma-copy"
+
+    # A factory's errors raise like any other call's.
+    try:
+        await conf.Gate.opened("")
+    except ValueError as exc:
+        async_error = str(exc)
+    else:
+        raise AssertionError("empty label did not raise from the async factory")
+    try:
+        conf.Gate.named_after("")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("empty label did not raise from the sync factory")
+
+    # What a factory returns is a real resource, so `async with` closes it.
+    async with await conf.Gate.opened("delta") as scoped:
+        assert scoped.label() == "delta"
+    assert not scoped.is_open()
+
+    await opened.close()
+    await copy.close()
+    assert conf.closed_gates() == closed_base + 3, "each factory instance closed once"
+    return f"factories construct and close; async factory error: {async_error}"
+
+
 CASES: tuple[tuple[str, Callable[[], Awaitable[str]]], ...] = (
     ("echo-types", case_echo_types),
     ("cancel-mid-flight", case_cancel_mid_flight),
     ("stream-backpressure", case_stream_backpressure),
     ("drop-without-close", case_resource_lifecycle),
     ("async-object-return", case_async_object_return),
+    ("static-factory", case_static_factory),
     ("bytes-stream", case_bytes_stream),
     ("zero-copy-gil", case_zero_copy_gil),
     ("panic-containment", case_panic_containment),

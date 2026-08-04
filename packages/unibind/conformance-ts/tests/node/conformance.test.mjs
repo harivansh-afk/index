@@ -424,6 +424,39 @@ test("objects construct, expose methods, and close idempotently", async () => {
   assert.equal(api.closedSessions(), closedBaseline + 1, "second close is a no-op");
 });
 
+test("static factories construct the object, sync and async", async () => {
+  const liveBaseline = api.liveSessions();
+
+  // The shape a constructor cannot take: a static that awaits before it
+  // has an instance to hand back.
+  const opened = await api.Session.opened("gamma");
+  assert.ok(opened instanceof api.Session, "async factory returns the wrapper class");
+  assert.equal(opened.name(), "gamma");
+  assert.equal(api.liveSessions(), liveBaseline + 1);
+
+  // A second factory on the same object, sync this time.
+  const copy = api.Session.namedAfter("gamma");
+  assert.ok(copy instanceof api.Session, "sync factory returns the wrapper class");
+  assert.equal(copy.name(), "gamma-copy");
+
+  // A factory's errors decode like any other call's.
+  await assert.rejects(() => api.Session.opened(""), api.BadQuery, "async factory errors decode");
+  assert.throws(() => api.Session.namedAfter(""), api.BadQuery, "sync factory errors decode");
+
+  // The instance a factory returns is a real resource: `await using`
+  // closes it, which is the whole point of returning the wrapper rather
+  // than a bare handle.
+  const closedBaseline = api.closedSessions();
+  {
+    await using scoped = await api.Session.opened("delta");
+    assert.equal(scoped.name(), "delta");
+  }
+  assert.equal(api.closedSessions(), closedBaseline + 1, "await using closed the factory's instance");
+
+  await opened.close();
+  await copy.close();
+});
+
 test("objects also arrive from plain function returns", async () => {
   const baseline = api.liveSessions();
   const session = api.openSession("beta");

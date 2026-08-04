@@ -109,6 +109,13 @@ pub struct Object {
     /// object itself is implied); `throws` may name an error.
     #[serde(default)]
     pub constructor: Option<Function>,
+    /// Named associated functions that construct the object, in
+    /// declaration order. Receiver-less like the constructor, but each
+    /// keeps its own name and may be async, so one object can offer
+    /// several. Unlike the constructor, `ret` carries the object type
+    /// rather than implying it.
+    #[serde(default)]
+    pub factories: Vec<Function>,
     /// Methods in declaration order; each implicitly takes `&self`.
     #[serde(default)]
     pub methods: Vec<Function>,

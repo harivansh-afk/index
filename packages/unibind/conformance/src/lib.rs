@@ -238,6 +238,32 @@ mod _conformance {
             })
         }
 
+        /// Open a gate after an async hop: the shape `__new__` cannot take,
+        /// since a Python constructor is synchronous. Renders as a
+        /// `@staticmethod` returning a coroutine, and one object may carry
+        /// several factories, each keeping its own name.
+        #[unibind(factory)]
+        pub async fn opened(label: String) -> Result<Self, ConformanceError> {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            Self::new(label)
+        }
+
+        /// A sync factory beside the async one, so both renderings and a
+        /// second factory on one object are covered.
+        #[unibind(factory)]
+        pub fn named_after(other: String) -> Result<Self, ConformanceError> {
+            // Refuse here rather than leaning on `new`: `format!` would
+            // turn an empty label into "-copy", which is a valid label, so
+            // the error assertion in the runner would pass against a call
+            // that never failed.
+            if other.is_empty() {
+                return Err(ConformanceError::Deliberate {
+                    message: "gate label must not be empty".to_owned(),
+                });
+            }
+            Self::new(format!("{other}-copy"))
+        }
+
         /// The label the gate was opened with.
         pub fn label(&self) -> String {
             self.label.clone()
