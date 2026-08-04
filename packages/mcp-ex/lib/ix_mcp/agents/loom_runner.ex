@@ -51,8 +51,11 @@ defmodule IxMcp.Agents.LoomRunner do
 
   defp prepare(vm, _session), do: ix_ok(["start", vm])
 
+  # `--wait-durable` because `prepare/2` restores this id on the very next
+  # line: `ix snapshot` returns at the capture, and a restore refuses a
+  # snapshot that is still `capturing`.
   defp snapshot do
-    with {:ok, out} <- ix(["snapshot", parent_vm()]) do
+    with {:ok, out} <- ix(["snapshot", parent_vm(), "--wait-durable"]) do
       case Regex.scan(@uuid, out) do
         [] -> {:error, :no_snapshot_id}
         matches -> {:ok, matches |> List.last() |> hd()}
