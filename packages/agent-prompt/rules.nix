@@ -185,8 +185,16 @@
     worktree = {
       topics = ["workflow"];
       text = ''
-        Never work in a primary checkout: every change, however small or
-        urgent, is made on a dedicated `git worktree` branch at
+        Never work in a primary checkout: isolate every change, however small
+        or urgent, before the first edit. A jj repo uses a dedicated
+        `jj workspace` for every change. Create it before editing and verify
+        its `jj root`. Use task-scoped `jj sparse set` patterns so the
+        workspace materializes only paths the change needs. Never use
+        `git worktree` for a jj repo: it bypasses jj's workspace record and
+        shared operation log.
+
+        A git repo that jj does not manage uses a dedicated `git worktree`
+        branch at
         `/tmp/worktree/<org>/<repo>/<name>` (org and repo from the
         checkout's origin URL), created before the first edit, and root
         and branch get verified before committing. A shared checkout is
@@ -199,13 +207,10 @@
         ordinary ix commit needing no second repository. An isolation worktree belongs to the session's repo,
         not necessarily your task's: verify its origin, and when the task
         targets another repo, add your own worktree of the target
-        checkout. A repo with no colocated `.git` fails
+        checkout. A non-jj repo with no colocated `.git` fails
         `git worktree add`. Keep the path and change the command:
         `git clone --filter=blob:none <origin>
-        /tmp/worktree/<org>/<repo>/<name>`. Use a `jj workspace` instead
-        when you need the repo's own operation log. Never point
-        `git worktree add` at `.jj/repo/store/git`: that store is jj's,
-        other sessions read it, and a worktree writes metadata into it.
+        /tmp/worktree/<org>/<repo>/<name>`.
         Unmerged branches are unfinished for reasons you may not see; check for
         open PRs touching a file before nontrivial edits.
       '';
@@ -224,17 +229,15 @@
         2026-07-29 at the operator's request: "the first action in any
         repo" reads as a rule about entering a repo, so an agent already
         mid-session asked for a one-line fix does not see itself covered.
-        No size or urgency exemption exists. Extended on 2026-07-31 for
-        repos with no colocated git: the shared checkouts of nix, ix and
-        index all carry `.jj` and no `.git`, so `git worktree add` fails
-        outright in each, and three agents in one session invented three
-        different substitutes for it. The filtered clone is named because
-        it is the one that keeps the standardized path. Worktreeing
-        `.jj/repo/store/git` is called out separately because it looks
-        like the obvious way through and is not: writing into a store
-        other sessions read is the same class of mistake as deleting a
-        shared checkout's `.git`, which destroyed another agent's
-        worktrees the same day (ENG-11676).
+        No size or urgency exemption exists. Revised on 2026-08-03 for ix's
+        jj views migration at the operator's direction: a filtered Git clone
+        loses the repo's jj operation history and view workspace state. A
+        dedicated jj workspace keeps those owners intact. Task-scoped sparse
+        patterns stop a one-file change from materializing unrelated view
+        trees. Pointing `git worktree add` at `.jj/repo/store/git` is still
+        forbidden: it writes Git metadata into a store other sessions read,
+        the same class of mistake that destroyed another agent's worktrees
+        in ENG-11676.
       '';
     };
   }
