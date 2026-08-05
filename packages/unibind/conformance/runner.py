@@ -356,6 +356,68 @@ async def case_static_factory() -> str:
     return f"factories construct and close; async factory error: {async_error}"
 
 
+def _doc_sites() -> list[tuple[str, str]]:
+    """Every docstring the extension exposes, by dotted name."""
+    sites: list[tuple[str, str]] = [("<module>", conf.__doc__ or "")]
+    for name in dir(conf):
+        if name.startswith("_"):
+            continue
+        member = getattr(conf, name)
+        doc = getattr(member, "__doc__", None)
+        if isinstance(doc, str):
+            sites.append((name, doc))
+        if not isinstance(member, type):
+            continue
+        for attr in vars(member):
+            if attr.startswith("_"):
+                continue
+            attr_doc = getattr(getattr(member, attr), "__doc__", None)
+            if isinstance(attr_doc, str):
+                sites.append((f"{name}.{attr}", attr_doc))
+    return sites
+
+
+async def case_doc_links() -> str:
+    """Intra-doc links reach __doc__ in Python's spelling, not rustdoc's."""
+    # One line per target kind the resolver distinguishes, each expectation
+    # anchored on prose from the fixture: a rendered name on its own can
+    # also come from a docstring the stub emitter synthesizes, which is how
+    # the first draft of this passed against a link pointing elsewhere.
+    rendered: tuple[tuple[str, str | None, str], ...] = (
+        # an object type, reached by the inline `[text](Target)` form
+        ("Shell.output", conf.Shell.output.__doc__, "opened under; see `Gate`."),
+        # a method on the object this one mints
+        ("Gate.open_shell", conf.Gate.open_shell.__doc__,
+         "Its bytes come back through `Shell.output`."),
+        # an error variant, which Python spells as its own exception class
+        ("Gate.opened", conf.Gate.opened.__doc__,
+         "Raises `Deliberate` on an empty label"),
+        # a sibling associated function, reached through `Self`
+        ("Gate.opened", conf.Gate.opened.__doc__,
+         "refusal `Gate.named_after` makes."),
+        # a record type, from an enumeration's own doc comment
+        ("Severity", conf.Severity.__doc__, "one to a `Finding`."),
+        # a method, from the object doc comment that already carried a link
+        ("Shell", conf.Shell.__doc__, "minted only by `Gate.open_shell`"),
+    )
+    for site, doc, expected in rendered:
+        assert doc is not None, f"{site} carries no docstring"
+        assert expected in doc, f"{site} docstring lacks {expected!r}: {doc!r}"
+
+    # No doc site keeps rustdoc syntax at runtime, records included: the macro
+    # writes the resolved lines back over the struct's own doc comments, which
+    # is the one site the generated wrappers do not own.
+    leftover = {name for name, doc in _doc_sites() if "[`" in doc}
+    assert not leftover, (
+        f"rustdoc link syntax survives into __doc__ at {sorted(leftover)}"
+    )
+    tail = conf.Shell.output.__doc__.splitlines()[-1].strip()
+    return (
+        f"{len(rendered)} link renderings match Python spelling "
+        f"(Shell.output ends {tail!r}); no doc site keeps rustdoc syntax"
+    )
+
+
 CASES: tuple[tuple[str, Callable[[], Awaitable[str]]], ...] = (
     ("echo-types", case_echo_types),
     ("unit-enums", case_unit_enums),
@@ -367,6 +429,7 @@ CASES: tuple[tuple[str, Callable[[], Awaitable[str]]], ...] = (
     ("bytes-stream", case_bytes_stream),
     ("zero-copy-gil", case_zero_copy_gil),
     ("panic-containment", case_panic_containment),
+    ("doc-links", case_doc_links),
 )
 
 

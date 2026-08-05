@@ -16,6 +16,7 @@
 
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
+import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import test from "node:test";
@@ -24,6 +25,15 @@ const pkgRoot = process.env.UNIBIND_CONFORMANCE_PKG;
 assert.ok(pkgRoot, "set UNIBIND_CONFORMANCE_PKG to the built package root");
 const require = createRequire(import.meta.url);
 const api = require(path.join(pkgRoot, "index.js"));
+
+// The generated files as text. Doc comments are part of what this package
+// publishes, so how one renders is a conformance case like any other.
+const generated = Object.fromEntries(
+  ["index.d.ts", "index.js", "schemas.ts"].map((name) => [
+    name,
+    fs.readFileSync(path.join(pkgRoot, name), "utf8"),
+  ]),
+);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -725,4 +735,97 @@ test("drop without close: GC finalization drops the Rust value", async () => {
     `napi finalizer never dropped the Rust value ` +
       `(wrapper collected: ${wrapperCollected}, live delta: ${api.liveSessions() - baseline})`,
   );
+});
+
+// A rustdoc intra-doc link in a Rust doc comment is resolved against the
+// interface and re-spelled the way TypeScript spells the item it names, so
+// `[`Session::events`]` publishes as {@link Session.events} and an editor can
+// follow it. Each case pins one target kind at one doc site; the string is
+// what the generated file has to contain verbatim.
+const renderedLinks = [
+  ["{@link Finding} carries one.", "a record type, from an enumeration's own docs"],
+  [
+    '- `warning`: Worth a look; {@link escalate} promotes `"info"` to this.',
+    "an exported function, and a sibling variant as its wire literal, from a variant's docs",
+  ],
+  [
+    '- `hard_failure`: Stop now: {@link escalate} leaves `"warning"` here.',
+    "a second variant's docs, resolved through `Self::`",
+  ],
+  [
+    "{@link Occurrence.occurrenceRole} renders as.",
+    "a record field carrying a ts rename, from that field's own docs",
+  ],
+  [
+    "The whole of {@link Facts.sourceBlob}, chunked.",
+    "a camelCased record field, from a sibling field's docs",
+  ],
+  ["one of {@link Severity}'s literals", "an enumeration type, from a record field's docs"],
+  ['`"hard_failure"`.', "an enumeration variant as its wire literal, from a record field's docs"],
+  [
+    "{@link FrameKind} is `PascalCase` on the",
+    "an enumeration whose variants are renamed wholesale",
+  ],
+  ['wire, so `"Started"` keeps its capital.', "that enumeration's variant, in its wire spelling"],
+  ["{@link failWith} mints one", "a camelCased exported function, from an error enum's own docs"],
+  ["{@link Session.tail} raises it for an", "an object method, from an error variant's docs"],
+  ["{@link checkedAdd} refuses.", "a camelCased function, from a second error variant's docs"],
+  [
+    "{@link Session.namedAfter}). An empty name raises",
+    "a sibling associated function through `Self::`, camelCased",
+  ],
+  ["{@link BadQuery}.", "an error variant, from an associated function's docs"],
+  ["Returns a {@link Badge}, not the object, so", "a record type, from an associated function"],
+  [
+    "instance method {@link Session.badge} answers the same question.",
+    "an object method through `Self::`, from an associated function",
+  ],
+  ["The {@link Shell} it hands back is the generated", "an object type, from an object method"],
+  ["{@link Facts} survives.", "the inline `[text](Target)` form, whose link text is dropped"],
+  ['{@link StoreMissingError}, `"query"` for', "an error variant carrying a ts rename"],
+  ["{@link OutOfRange}.", "a third error variant, from the same function's docs"],
+  [
+    "{@link Session.opened} is the associated-function path",
+    "an associated function as a target, from an exported function's docs",
+  ],
+];
+
+test("intra-doc links reach index.d.ts in TypeScript's own spelling", () => {
+  for (const [rendered, what] of renderedLinks) {
+    assert.ok(
+      generated["index.d.ts"].includes(rendered),
+      `index.d.ts is missing ${what}: ${rendered}`,
+    );
+  }
+});
+
+test("the same rendering reaches index.js, where the doc block has a runtime home", () => {
+  // Records and enumerations are types only, so their docs stop at the
+  // declarations; everything with a class or a function behind it carries the
+  // same rendered block into the runtime file too.
+  for (const rendered of [
+    "{@link failWith} mints one",
+    "{@link Session.tail} raises it for an",
+    "{@link Session.namedAfter}). An empty name raises",
+    "instance method {@link Session.badge} answers the same question.",
+    "The {@link Shell} it hands back is the generated",
+    "{@link Facts} survives.",
+    '{@link StoreMissingError}, `"query"` for',
+    "{@link Session.opened} is the associated-function path",
+  ]) {
+    assert.ok(generated["index.js"].includes(rendered), `index.js is missing: ${rendered}`);
+  }
+});
+
+test("no rustdoc link syntax survives into the generated files", () => {
+  // The load-bearing one. Every assertion above names a link that exists
+  // today, so together they cannot notice a link nobody thought to list --
+  // and a link that ships unresolved is exactly the failure this mechanism
+  // exists to make impossible (ENG-12396: fourteen of them outlived a rename
+  // as dead text in the published .d.ts). Any `[`...`]` left anywhere in a
+  // published file fails here, whoever wrote it and whenever it appeared.
+  for (const [name, text] of Object.entries(generated)) {
+    const leftover = text.split("\n").filter((line) => line.includes("[`"));
+    assert.deepEqual(leftover, [], `${name} publishes unresolved rustdoc link syntax`);
+  }
 });

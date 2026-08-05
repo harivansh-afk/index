@@ -24,23 +24,26 @@ mod _conformance {
     use unibind_runtime::UniStream;
 
     /// A plain-data record crossing the boundary by value.
+    ///
+    /// [`echo_record`] hands one back unchanged, so a coordinate that
+    /// survives the trip proves the by-value path in both directions.
     #[unibind::record]
     #[derive(Clone)]
     pub struct Point {
-        /// Horizontal coordinate.
+        /// Horizontal coordinate, paired with [`Self::y`].
         pub x: f64,
         /// Vertical coordinate.
         pub y: f64,
     }
 
     /// How severe a conformance probe's finding is; a closed set whose
-    /// members cross as `StrEnum` values.
+    /// members cross as `StrEnum` values, one to a [`Finding`].
     #[unibind::enumeration]
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub enum Severity {
         /// Routine.
         Info,
-        /// Worth a look.
+        /// Worth a look. [`escalate`] promotes it to [`Self::HardFailure`].
         Warning,
         /// Stop now.
         HardFailure,
@@ -305,6 +308,11 @@ mod _conformance {
         /// since a Python constructor is synchronous. Renders as a
         /// `@staticmethod` returning a coroutine, and one object may carry
         /// several of these, each keeping its own name.
+        ///
+        /// # Errors
+        ///
+        /// Raises [`ConformanceError::Deliberate`] on an empty label, the same
+        /// refusal [`Self::named_after`] makes.
         #[unibind(associated)]
         pub async fn opened(label: String) -> Result<Self, ConformanceError> {
             tokio::time::sleep(Duration::from_millis(1)).await;
@@ -358,7 +366,7 @@ mod _conformance {
         /// error into the exception hierarchy, and route the success value
         /// through `Shell`'s glue class. Every other object here is minted
         /// by a constructor or a sync call, so nothing else reaches that
-        /// combination.
+        /// combination. Its bytes come back through [`Shell::output`].
         ///
         /// # Errors
         ///
@@ -425,7 +433,9 @@ mod _conformance {
         ///
         /// Every chunk opens with NUL and `0xFF`. Neither survives a UTF-8
         /// round trip, so a codec that decoded items as text anywhere on
-        /// the path fails the assertion instead of passing quietly.
+        /// the path fails the assertion instead of passing quietly. What
+        /// follows the prefix is the command qualified by the label it was
+        /// opened under; see [the opening handle](Gate).
         pub fn output(&self, n: u64) -> UniStream<Vec<u8>> {
             let command = self.command.clone();
             UniStream::new(futures::stream::iter((0..n).map(move |index| {

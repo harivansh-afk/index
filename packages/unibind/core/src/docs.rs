@@ -34,6 +34,12 @@
 //! target is not an item path. The inline form's text is not carried into
 //! the rendering: the target's language spelling replaces the whole link,
 //! so write the sentence around the reference rather than through it.
+//!
+//! A reference link (`` [`Machine`][handle] ``) is refused rather than
+//! passed over. Its target lives in a link definition, and nothing writes
+//! those definitions into a `.d.ts` or a `.pyi`, so passing it through
+//! ships exactly the dead text this module exists to refuse -- with no
+//! build error, which is worse than the class it replaced.
 
 use std::fmt;
 
@@ -185,6 +191,17 @@ enum Owner<'a> {
 }
 
 impl<'a> Owner<'a> {
+    /// The type `Self` names at this doc site, for a bare `` [`Self`] ``.
+    const fn target(self) -> Option<Target<'a>> {
+        Some(match self {
+            Self::None => return None,
+            Self::Record(record) => Target::Record(record),
+            Self::Enumeration(declared) => Target::Enumeration(declared),
+            Self::Error(error) => Target::Error(error),
+            Self::Object(object) => Target::Object(object),
+        })
+    }
+
     /// The type name a `Self::x` link resolves through; `None` at a doc
     /// site that has no enclosing type.
     fn type_name(self) -> Option<&'a str> {
@@ -204,15 +221,29 @@ struct Parsed<'a> {
     path: &'a str,
     /// Bytes of the line the whole link occupies, from its `[`.
     len: usize,
+    /// Which markdown spelling it uses.
+    form: Form,
+}
+
+/// The markdown spellings a link can take.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Form {
+    /// `` [`Machine`] `` or `[text](Machine)`: the target is right there.
+    Direct,
+    /// `` [`Machine`][handle] ``: the target is a label defined elsewhere in
+    /// the document. Refused, because the generated surface has nowhere to
+    /// put the definition, so it would ship as dead text.
+    Reference,
 }
 
 /// Parse the link that starts at `text`, which begins with `[`.
 ///
-/// `None` for a bracket that is not an intra-doc link: prose (`[1]`), a
-/// reference link, or a plain markdown link whose target is a URL rather
-/// than an item path. The code-span form is always a link claim, so a
-/// target that is not an item path stays a link here and fails in
-/// resolution, where the message can say so.
+/// `None` for a bracket that is not an intra-doc link: prose (`[1]`), or a
+/// plain markdown link whose target is a URL rather than an item path. The
+/// code-span form is always a link claim, so a target that is not an item
+/// path stays a link here and fails in resolution, where the message can
+/// say so -- and so does a reference link, whose definition the generated
+/// surface has no place for.
 fn parse_link(text: &str) -> Option<Parsed<'_>> {
     let code_span = text.starts_with("[`");
     let (inner, bracket_end) = if code_span {
@@ -235,16 +266,29 @@ fn parse_link(text: &str) -> Option<Parsed<'_>> {
         return Some(Parsed {
             path,
             len: bracket_end + 1 + end + 1,
+            form: Form::Direct,
         });
     }
-    // A reference link (`[`x`][spec]`) resolves through a definition this
-    // module knows nothing about, so it passes through untouched.
-    if !code_span || tail.starts_with('[') {
+    if !code_span {
         return None;
+    }
+    // A reference link carries its target in a definition elsewhere in the
+    // document. Nothing renders those definitions into a `.d.ts` or a `.pyi`,
+    // so the reference would ship as the text it is written with -- exactly
+    // the dead text this module exists to refuse. It is a link claim, so it
+    // is caught rather than passed over.
+    if let Some(label) = tail.strip_prefix('[') {
+        let end = label.find(']')?;
+        return Some(Parsed {
+            path: inner,
+            len: bracket_end + 1 + end + 1,
+            form: Form::Reference,
+        });
     }
     Some(Parsed {
         path: inner,
         len: bracket_end,
+        form: Form::Direct,
     })
 }
 
@@ -288,6 +332,13 @@ fn resolve_path<'a>(
         );
     }
     let Some(member) = second else {
+        if first == "Self" {
+            return owner.target().ok_or_else(|| {
+                "`Self` names nothing at this doc site, which has no enclosing \
+                 type; write the type's name"
+                    .to_owned()
+            });
+        }
         return resolve_type_or_function(interface, first);
     };
     let type_name = if first == "Self" {
@@ -514,7 +565,18 @@ fn rewrite_line(line: &str, context: &Context<'_>, dead: &mut Vec<DocError>) -> 
             continue;
         };
         let written = tail.get(..parsed.len).unwrap_or_default();
-        match resolve_path(context.interface, context.owner, parsed.path) {
+        let resolved = if parsed.form == Form::Reference {
+            Err(format!(
+                "a reference link is resolved through a link definition, and \
+                 nothing writes those definitions into index.d.ts or the .pyi, \
+                 so this would ship as the text it is written with. Write it \
+                 inline: [`{}`]",
+                parsed.path
+            ))
+        } else {
+            resolve_path(context.interface, context.owner, parsed.path)
+        };
+        match resolved {
             // A dead link stays as written while the walk goes on, so one
             // build reports every one of them rather than the first.
             Err(reason) => {

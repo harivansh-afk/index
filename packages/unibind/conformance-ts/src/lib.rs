@@ -62,6 +62,8 @@ mod conformance {
         /// Byte offset one past the end.
         pub end: i64,
         /// What the occurrence does at that site, e.g. `"definition"`.
+        /// TypeScript spells this field its own way, which is what
+        /// [`Self::role`] renders as.
         #[unibind(ts(name = "occurrenceRole"))]
         pub role: String,
     }
@@ -79,7 +81,7 @@ mod conformance {
         pub source_blob: Vec<u8>,
         /// The same bytes split up: inside a `Vec` they are not a `Buffer`
         /// but the plain `Array<number>` the container's own element type
-        /// spells.
+        /// spells. The whole of [`Self::source_blob`], chunked.
         pub blob_chunks: Vec<Vec<u8>>,
         /// The occurrence to show first, if any: a record nested under
         /// `Option`, optional in both directions.
@@ -89,15 +91,15 @@ mod conformance {
     }
 
     /// How severe a finding is; a closed set that crosses as a union of
-    /// string literals in TypeScript.
+    /// string literals in TypeScript. [`Finding`] carries one.
     #[unibind::enumeration]
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub enum Severity {
         /// Routine.
         Info,
-        /// Worth a look.
+        /// Worth a look; [`escalate`] promotes [`Self::Info`] to this.
         Warning,
-        /// Stop now.
+        /// Stop now: [`escalate`] leaves [`Self::Warning`] here.
         HardFailure,
     }
 
@@ -119,9 +121,11 @@ mod conformance {
     #[unibind::record]
     #[derive(Clone)]
     pub struct Finding {
-        /// How bad it is.
+        /// How bad it is: one of [`Severity`]'s literals, the worst being
+        /// [`Severity::HardFailure`].
         pub severity: Severity,
-        /// Which frame reported it.
+        /// Which frame reported it. [`FrameKind`] is `PascalCase` on the
+        /// wire, so [`FrameKind::Started`] keeps its capital.
         pub kind: FrameKind,
         /// Human text.
         pub detail: String,
@@ -182,15 +186,18 @@ mod conformance {
         vec![0x00, 0xFF, 0xFE, b'i', b'x', 0x80]
     }
 
-    /// Everything the conformance boundary raises.
+    /// Everything the conformance boundary raises; [`fail_with`] mints one
+    /// of each.
     #[unibind::error]
     pub enum ConformanceError {
         /// The requested store does not exist.
         #[unibind(ts(name = "StoreMissingError"), py(name = "StoreMissing"))]
         StoreGone { name: String },
-        /// The query does not parse.
+        /// The query does not parse; [`Session::tail`] raises it for an
+        /// empty query.
         BadQuery(String),
-        /// A value fell outside the supported range.
+        /// A value fell outside the supported range, which is what
+        /// [`checked_add`] refuses.
         OutOfRange { value: i64 },
     }
 
@@ -237,7 +244,8 @@ mod conformance {
         pub totals: HashMap<String, u64>,
     }
 
-    /// Echo facts through the boundary unchanged.
+    /// Echo facts through the boundary unchanged: every field of
+    /// [the fact record](Facts) survives.
     pub fn echo_facts(facts: Facts) -> Facts {
         facts
     }
@@ -338,8 +346,10 @@ mod conformance {
         data.iter().map(|byte| byte.wrapping_mul(2)).collect()
     }
 
-    /// Fail with the requested variant: `"store"`, `"query"`, or anything
-    /// else for the out-of-range variant.
+    /// Fail with the requested variant: `"store"` for
+    /// [`ConformanceError::StoreGone`], `"query"` for
+    /// [`ConformanceError::BadQuery`], anything else for
+    /// [`ConformanceError::OutOfRange`].
     pub fn fail_with(variant: &str) -> Result<i64, ConformanceError> {
         match variant {
             "store" => Err(ConformanceError::StoreGone {
@@ -487,7 +497,9 @@ mod conformance {
         /// cannot take, since napi's `constructor` and Python's `__new__`
         /// are both synchronous. Renders as a static `Session.opened(...)`
         /// returning a promise, and there may be several such functions on
-        /// one object, each keeping its own name.
+        /// one object, each keeping its own name (see
+        /// [`Self::named_after`]). An empty name raises
+        /// [`ConformanceError::BadQuery`].
         #[unibind(associated)]
         pub async fn opened(name: String) -> Result<Self, ConformanceError> {
             tokio::time::sleep(Duration::from_millis(1)).await;
@@ -512,9 +524,10 @@ mod conformance {
         }
 
         /// An associated function that answers about the type rather
-        /// than constructing it. Returns a record, not the object, so it
-        /// renders as a plain static: marking this one a napi factory
-        /// would tell napi to build a Session out of a Badge.
+        /// than constructing it. Returns a [`Badge`], not the object, so
+        /// it renders as a plain static: marking this one a napi factory
+        /// would tell napi to build a Session out of a Badge. The
+        /// instance method [`Self::badge`] answers the same question.
         #[unibind(associated)]
         pub fn describe(name: String) -> Badge {
             Badge {
@@ -637,7 +650,8 @@ mod conformance {
         /// wrapper class rather than the bare native handle. [`Self::keys`]
         /// covers only the sync half of that, and the constructor covers
         /// only the fallible half, so nothing else here reaches the
-        /// combination.
+        /// combination. The [`Shell`] it hands back is the generated
+        /// wrapper class.
         pub async fn open_shell(&self, command: String) -> Result<Shell, ConformanceError> {
             tokio::time::sleep(Duration::from_millis(1)).await;
             if command.is_empty() {
@@ -748,7 +762,9 @@ mod conformance {
         SESSION_EVENTS_PRODUCED.load(Ordering::SeqCst)
     }
 
-    /// Open a session from a free function (the non-constructor path).
+    /// Open a session from a free function (the non-constructor path);
+    /// [`Session::opened`] is the associated-function path to the same
+    /// thing.
     pub fn open_session(name: String) -> Session {
         LIVE_SESSIONS.fetch_add(1, Ordering::SeqCst);
         Session {
