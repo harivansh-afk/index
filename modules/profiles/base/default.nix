@@ -868,19 +868,28 @@ in {
 
     systemd.tmpfiles.rules =
       [
-        # With `use-sqlite-wal = false` (above) nix opens db.sqlite on
-        # SQLite's unix-dotfile VFS, whose lock is a real directory entry
-        # (`db.sqlite.lock`) rather than a POSIX lock that dies with its
-        # holder. A rootfs captured while nix held that lock (golden
-        # template capture of a mid-write guest) therefore boots with the
-        # lock still present, and every later nix invocation spins forever
-        # in SQLITE_BUSY retries -- `ix apply` then fails its 5s
-        # wasm-capability probe with "stream into guest failed" (ix#8389).
-        # After a fresh boot no process can hold the lock, so removing it
-        # here ("!" = boot only, before nix-daemon or any login shell can
-        # run nix) is always safe. The sibling db.sqlite-journal must
-        # stay: a hot journal is how SQLite rolls back the interrupted
-        # write on next open.
+        # Belt and suspenders, not the mechanism. The guarantee is made at
+        # capture: sealing an image refuses when a platform-made lock
+        # artifact is present in it (ENG-12405), because a boot-side heal
+        # can only enumerate the messes someone already found, while a
+        # capture-side gate refuses the ones nobody has met yet. This rule
+        # stays for images sealed before that gate existed, and for a lock
+        # arriving by a route the gate's list does not yet name.
+        #
+        # What it heals: with `use-sqlite-wal = false` (above) nix opens
+        # db.sqlite on SQLite's unix-dotfile VFS, whose lock is a real
+        # directory entry (`db.sqlite.lock`) rather than a POSIX lock that
+        # dies with its holder. A rootfs carrying one boots with the lock
+        # still present and no process able to hold it, so every later nix
+        # invocation spins forever in SQLITE_BUSY retries -- `ix apply`
+        # then fails its 5s wasm-capability probe with "stream into guest
+        # failed" (ix#8389). Removing it here ("!" = boot only, before
+        # nix-daemon or any login shell can run nix) is always safe for
+        # the same reason it is needed: after a fresh boot nobody holds it.
+        #
+        # The sibling db.sqlite-journal must stay, and the seal gate does
+        # not refuse it either: a hot journal is how SQLite rolls back the
+        # interrupted write on next open.
         "R! /nix/var/nix/db/db.sqlite.lock"
       ]
       # Pre-create the workspace at boot so login.nu can cd into it
