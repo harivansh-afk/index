@@ -1088,6 +1088,27 @@
     };
   }
   {
+    commitDiscipline = {
+      topics = ["tooling"];
+      text = ''
+        A commit follows a green check; never commit while the
+        verification you started is unread or red, because the sha then
+        claims what the log refutes. In a worktree shared with other
+        agents, git add names explicit paths, never `-A` or `.`: the
+        index is shared state, and a bare commit sweeps a sibling's
+        staged work into a commit whose message describes none of it.
+      '';
+      reason = ''
+        Both happened on 2026-08-04 in one session: a marker-file commit
+        absorbed a sibling agent's entire 16-file guest-daemon change
+        because the sibling had staged it in the shared index, and a
+        clippy fix was committed while its build check sat at rc=1,
+        which turned out to be a real 9-error compile failure the
+        rebase had introduced.
+      '';
+    };
+  }
+  {
     subagentTopology = {
       topics = ["tooling"];
       text = ''
