@@ -496,6 +496,63 @@
           // lib.optionalAttrs (secret.owner != null) {inherit (secret) owner;}
           // lib.optionalAttrs (secret.mode != null) {inherit (secret) mode;};
       };
+
+  # Every tmpfs this image sizes against RAM, as `{mountpoint, size}` with the
+  # declared spec verbatim ("50%", "2G").
+  #
+  # A tmpfs `size=N%` is resolved exactly once, when the filesystem is mounted,
+  # against `totalram_pages()`, and stored as a fixed block count (mm/shmem.c,
+  # `shmem_parse_one`). The fraction does not survive: /proc/self/mountinfo
+  # carries the donor's already-resolved byte count and nothing that says which
+  # fraction produced it. A golden restore never re-mounts, so a clone keeps
+  # the caps the DONOR's RAM produced. Publishing the declaration is what lets
+  # ix-vm-guest recompute them for the machine it was actually restored onto
+  # (ENG-12403; the reader is `handler/configure/tmpfs_sizing.rs`).
+  #
+  # Read from the evaluated config rather than hand-listed. `boot.runSize`,
+  # `boot.devShmSize` and `boot.tmp.tmpfsSize` are ordinary options an image
+  # may override, so a fixed list here would eventually hand the guest a
+  # fraction its mounts were never built from -- the disagreement this is
+  # meant to make impossible.
+  declaredTmpfsSize = options: let
+    sized = builtins.filter (option: lib.hasPrefix "size=" option) options;
+  in
+    if sized == []
+    then null
+    else lib.removePrefix "size=" (lib.last sized);
+
+  ramSizedMount = mountPoint: fsType: options: let
+    size = declaredTmpfsSize options;
+  in
+    lib.optional (fsType == "tmpfs" && size != null) {
+      mountpoint = mountPoint;
+      inherit size;
+    };
+
+  ramSizedMountsIn = fileSystemAttrs:
+    lib.concatLists (
+      lib.mapAttrsToList (
+        mountPoint: fs: ramSizedMount mountPoint fs.fsType fs.options
+      )
+      fileSystemAttrs
+    );
+
+  # `boot.specialFileSystems` is where /run and /dev/shm get their fractions,
+  # `fileSystems` is any tmpfs the image declares itself, and `systemd.mounts`
+  # is where `boot.tmp.useTmpfs = true` lands /tmp.
+  ramSizedTmpfsMounts =
+    ramSizedMountsIn config.boot.specialFileSystems
+    ++ ramSizedMountsIn config.fileSystems
+    ++ lib.concatLists (
+      map (
+        mount:
+          ramSizedMount mount.where mount.type (
+            lib.splitString "," (mount.options or "")
+            ++ lib.splitString "," (mount.mountConfig.Options or "")
+          )
+      )
+      config.systemd.mounts
+    );
 in {
   options.ix = {
     secrets = lib.mkOption {
@@ -781,8 +838,11 @@ in {
       # mounts /tmp while only the unpluggable virtio-mem base is present
       # (`VIRTIO_MEM_BOOT_BASE_MIB`, 3 GiB), well before the host's
       # post-health-check resize, so the cap is taken against a ~3 GiB
-      # total and then frozen for the life of the VM. A restored VM
-      # inherits whatever cap its golden capture happened to mount.
+      # total and then frozen for the life of the VM. Golden restore no
+      # longer inherits that answer -- `ix/tmpfs-sizing.json` below hands
+      # the declared fraction to ix-vm-guest, which re-resolves it against
+      # the restored machine's own memory (ENG-12403) -- but the boot-time
+      # freeze against the 3 GiB base is still what a first boot gets.
       #
       # Measured on two live hil guests (2026-07-29): /tmp mounted
       # `size=1491832k` -- an absolute 1.42 GiB, not a percentage -- while
@@ -822,6 +882,18 @@ in {
         # without racing the workload.
       };
     };
+
+    # The mount-time RAM fractions this image declared, published for the guest
+    # daemon's re-personalization step: the kernel throws the fraction away at
+    # mount time, so a restored clone cannot recompute its own caps without
+    # being told what they were meant to be. Path is duplicated in
+    # `MANIFEST_PATH` in crates/vm/guest/daemon/src/handler/configure/
+    # tmpfs_sizing.rs; a rename on either side shows up as "image declares no
+    # RAM-derived tmpfs caps" at debug in the guest journal.
+    environment.etc."ix/tmpfs-sizing.json".source =
+      (pkgs.formats.json {}).generate "ix-tmpfs-sizing.json" {
+        mounts = ramSizedTmpfsMounts;
+      };
 
     # Many ix VMs are SSH'd into and used as interactive dev machines, where
     # operators run unpatched prebuilt binaries (npm-installed CLIs, LSPs,
