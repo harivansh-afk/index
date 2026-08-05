@@ -289,6 +289,12 @@
     cron = false;
     fableFallback = true;
     autoCompactWindow = 300000;
+    # Experimental upstream (mesh teammate sessions + the "Team:" panel).
+    # Off, matching upstream's default. Distinct from subagents, which are
+    # stock: SendMessage to a running or completed subagent works without
+    # this (sub-agents.md: "SendMessage doesn't require agent teams to be
+    # enabled; only structured team-protocol messages ... do").
+    agentTeams = false;
   };
   unknownFeatures = lib.subtractLists (builtins.attrNames defaultFeatures) (builtins.attrNames features);
   effectiveFeatures =
@@ -308,12 +314,15 @@
     // lib.optionalAttrs (effectiveFeatures.autoCompactWindow != null) {
       CLAUDE_CODE_AUTO_COMPACT_WINDOW = toString effectiveFeatures.autoCompactWindow;
     };
-  # SendMessage is gated on this env var as well as on its permission row:
-  # agent teams is experimental, so a permission row without the var renders a
-  # deny-free tool the session never actually shows. Derived from the tool row
-  # (defined below) so the two cannot drift, which is how the row came to
-  # promise a tool no consumer had (#4224).
-  agentTeamsEnv = lib.optionalAttrs effectiveSystemTools.SendMessage {
+  # Historically this env var was derived from the SendMessage tool row
+  # because the tool was believed teams-only (#4224). Upstream docs now state
+  # the opposite: SendMessage-to-subagents is stock, and only team-protocol
+  # messages need teams (sub-agents.md, verified 2026-08-04). So the two are
+  # decoupled: the tool row keeps subagent continuation working (denying it
+  # reintroduces ENG-10401, the duplicate-agent spawn the Agent description
+  # provokes when SendMessage is denied), and teams is an ordinary feature
+  # toggle, default off like upstream.
+  agentTeamsEnv = lib.optionalAttrs effectiveFeatures.agentTeams {
     CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
   };
   wrapperEnvDefaults = disabledFeatureEnv // agentTeamsEnv;

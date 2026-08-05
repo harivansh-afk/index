@@ -5224,8 +5224,9 @@
         # only move left is a second Agent call on the first one's files
         # (observed, ENG-10401); the Bash description names Monitor for waiting
         # on a condition. Pin both out of the deny list, and pin that the
-        # experimental agent-teams env var rides along with SendMessage: the
-        # tool stays hidden without it, so the permission row alone is a lie.
+        # SendMessage stays allowed WITHOUT the teams env var: subagent
+        # continuation is stock (sub-agents.md), denying the tool reopens
+        # ENG-10401, and agent teams (mesh sessions) default off upstream.
         assertion = let
           policy = homeAgentConfig.programs.claude-code.package.passthru.settingsPolicy;
         in
@@ -5234,8 +5235,8 @@
             "ReportFindings"
             "SendMessage"
           ]
-          && policy.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS == "1";
-        message = "claude-code must not deny tools its own tool descriptions tell the model to use, and SendMessage must bake the agent-teams env var it needs";
+          && !(policy.env ? CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS);
+        message = "claude-code must not deny tools its own tool descriptions tell the model to use, and the experimental agent-teams env must stay off by default (SendMessage no longer implies it)";
       }
       {
         assertion =

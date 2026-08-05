@@ -530,11 +530,12 @@ in {
       #    ToolSearch fetch (default would defer once MCP defs cross a char cap).
       #  - CLAUDE_CODE_DISABLE_CRON=1 → drops the scheduling/loop tools
       #    (CronCreate/CronDelete/CronList).
-      # Agent teams follow the index claude-code wrapper's env_defaults, which
-      # derive CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS from the SendMessage tool
-      # row so the var and the permission cannot disagree (#4224); the context
-      # window clamp is baked into the wrapper's settings render (index#2167).
-      # No per-machine override for either here.
+      # Agent teams (mesh teammate sessions) are off: the wrapper's
+      # features.agentTeams defaults false, matching upstream. SendMessage
+      # stays on independently -- subagent continuation is stock and does not
+      # need the teams env (decoupled 2026-08-04; was derived from the tool
+      # row under the old #4224 belief). Context window clamp is baked into
+      # the wrapper's settings render (index#2167).
       ENABLE_TOOL_SEARCH = "false";
       CLAUDE_CODE_DISABLE_CRON = "1";
     }
