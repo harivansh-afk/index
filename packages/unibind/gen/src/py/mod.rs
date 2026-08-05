@@ -9,6 +9,7 @@ mod stub;
 mod types;
 mod wrapper;
 
+use unibind_core::docs;
 use unibind_core::ir::Interface;
 
 use crate::host::{EmitError, HostEmitter, HostFile};
@@ -28,6 +29,11 @@ impl HostEmitter for PyEmitter {
     }
 
     fn emit(&self, interface: &Interface) -> Result<Vec<HostFile>, EmitError> {
+        // Doc comments are written against the Rust surface; their intra-doc
+        // links become Python references here, once, before the stub or the
+        // wrapper renders one.
+        let interface = &docs::resolve(interface, docs::Language::Py)
+            .map_err(|error| EmitError { message: error.to_string() })?;
         // Same module-name rule the pyo3 backend applies when it registers
         // the `#[pymodule]`.
         let module_name = interface

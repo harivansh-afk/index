@@ -122,3 +122,29 @@ pub fn camel_case(variant: &str) -> String {
         first.to_lowercase().collect::<String>() + chars.as_str()
     })
 }
+
+/// `forward_port` -> `forwardPort`.
+///
+/// napi's own conversion, applied to every unrenamed function, method,
+/// argument and record field, and the convention the JVM backend's Java
+/// names follow too.
+///
+/// Distinct from [`camel_case`], which lowercases one leading character to
+/// spell a *wire* value the way serde does. This one is about identifiers a
+/// caller types, so it consumes the separators.
+#[must_use]
+pub fn lower_camel_case(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut upper_next = false;
+    for character in name.chars() {
+        if character == '_' {
+            upper_next = !out.is_empty();
+        } else if upper_next {
+            out.extend(character.to_uppercase());
+            upper_next = false;
+        } else {
+            out.push(character);
+        }
+    }
+    out
+}

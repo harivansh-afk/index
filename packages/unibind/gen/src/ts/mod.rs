@@ -18,6 +18,7 @@ mod js;
 mod types;
 mod zod;
 
+use unibind_core::docs;
 use unibind_core::ir::Interface;
 
 use crate::host::{EmitError, HostEmitter, HostFile};
@@ -37,6 +38,11 @@ impl HostEmitter for TsEmitter {
     }
 
     fn emit(&self, interface: &Interface) -> Result<Vec<HostFile>, EmitError> {
+        // Doc comments are written against the Rust surface, so their
+        // intra-doc links are resolved into TSDoc `{@link ...}` references
+        // here, once, before any of the three files renders one.
+        let interface = &docs::resolve(interface, docs::Language::Ts)
+            .map_err(|error| EmitError { message: error.to_string() })?;
         let mut files = vec![HostFile {
             path: "index.d.ts".to_owned(),
             contents: dts::render(interface)?,

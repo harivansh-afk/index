@@ -8,6 +8,7 @@
 //! binding code.
 
 pub mod casing;
+pub mod docs;
 pub mod embed;
 pub mod ir;
 mod lower;

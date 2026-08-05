@@ -62,18 +62,37 @@ fn backends(
     let selects = |backend| selected.is_none_or(|backends| backends.contains(&backend));
     let mut glue = TokenStream::new();
     if selects(unibind_core::Backend::Py) {
+        let interface = &resolve_docs(interface, unibind_core::docs::Language::Py)?;
         glue.extend(backend_py(interface, module, selected.is_some())?);
     }
     if selects(unibind_core::Backend::Ts) {
+        let interface = &resolve_docs(interface, unibind_core::docs::Language::Ts)?;
         glue.extend(backend_ts(interface, module, selected.is_some())?);
     }
     if selects(unibind_core::Backend::Ex) {
+        let interface = &resolve_docs(interface, unibind_core::docs::Language::Ex)?;
         glue.extend(backend_ex(interface, module, selected.is_some())?);
     }
     if selects(unibind_core::Backend::Jvm) {
+        let interface = &resolve_docs(interface, unibind_core::docs::Language::Jvm)?;
         glue.extend(backend_jvm(interface, module, selected.is_some())?);
     }
     Ok(glue)
+}
+
+/// The interface with its doc comments spelled for one language, so the
+/// `#[doc]` attributes the glue carries name the same identifiers the
+/// generated host files do. Lowering already refused an unresolvable link,
+/// so a failure here is one the diagnostic still has to name rather than a
+/// case a caller can hit.
+fn resolve_docs(
+    interface: &unibind_core::ir::Interface,
+    language: unibind_core::docs::Language,
+) -> Result<unibind_core::ir::Interface, LowerError> {
+    unibind_core::docs::resolve(interface, language).map_err(|error| LowerError {
+        span: proc_macro2::Span::call_site(),
+        message: error.to_string(),
+    })
 }
 
 macro_rules! enabled_backend {

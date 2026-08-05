@@ -183,6 +183,12 @@ pub fn lower_module(
         }
     }
     interface.objects = objects.finish()?;
+    // Every doc comment in this module reaches four published surfaces, so a
+    // link that names nothing is refused here rather than shipped as dead
+    // text (ENG-12396). The span is the module's: the IR carries no per-doc
+    // spans, and the message names the doc site instead.
+    crate::docs::validate(&interface)
+        .map_err(|error| LowerError::new(module.span(), error.to_string()))?;
     Ok(interface)
 }
 

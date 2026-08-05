@@ -43,20 +43,12 @@ impl Level {
 
 /// napi's automatic `snake_case` -> `camelCase` conversion, applied to every
 /// unrenamed function, method, argument, and record field name.
+///
+/// The rule lives in `unibind_core::casing` because the intra-doc link
+/// resolver spells `{@link Machine.forwardPort}` with it: a second copy here
+/// is how a link and the member it names would come to disagree.
 pub fn camel_case(name: &str) -> String {
-    let mut out = String::with_capacity(name.len());
-    let mut upper_next = false;
-    for character in name.chars() {
-        if character == '_' {
-            upper_next = !out.is_empty();
-        } else if upper_next {
-            out.extend(character.to_uppercase());
-            upper_next = false;
-        } else {
-            out.push(character);
-        }
-    }
-    out
+    unibind_core::casing::lower_camel_case(name)
 }
 
 /// The JavaScript name of a value item (function, method, argument, or
