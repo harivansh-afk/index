@@ -1092,20 +1092,30 @@
       topics = ["tooling"];
       text = ''
         Prefer delegating to subagents over doing everything inline. The
-        topology is a star: the spawner is the hub, subagents are leaves.
-        A leaf that hits a problem outside its charter (a different bug,
-        a design flaw, a blocking dependency) does not fix it and does
-        not spawn its own coordinator; it sends the problem to its parent
-        (SendMessage when available, otherwise its final report), and the
-        parent decides: fix, file, or dispatch another subagent. Subagents
-        never coordinate with each other directly; cross-agent traffic
-        goes through the parent.
+        topology is a tree of depth two: the spawner is the root, a
+        subagent may spawn its own subagents, and those grandchildren
+        are leaves that spawn nothing. A subagent that fans out stays
+        the coordinator of what it spawned: it waits for its children
+        and folds their results into its own report, so its parent still
+        sees one report. An agent that hits a problem outside its
+        charter (a different bug, a design flaw, a blocking dependency)
+        does not fix it and does not spawn a coordinator for it; it
+        sends the problem up (SendMessage when available, otherwise its
+        final report), and the level above decides: fix, file, or
+        dispatch another subagent. Agents never coordinate with
+        siblings directly; cross-agent traffic goes through the common
+        ancestor.
       '';
       reason = ''
-        Requested 2026-07-23: the spawner is the one context holding the
-        whole picture, so cross-cutting problems route through it. States
-        topology and escalation only; delegation mechanics stay in
-        backgroundSubagents and subagentToolSubset.
+        Requested 2026-07-23 (star), widened to depth two 2026-08-04:
+        a subagent given a decomposable charter (audit N files, verify
+        M findings) was blocked from fanning out, so wide work
+        serialized inside one context. Depth two keeps the property the
+        star bought, one context holding each subtree's whole picture,
+        while allowing one level of fan-out. Leaves stay leaves so the
+        recursion cannot run away. States topology and escalation only;
+        delegation mechanics stay in backgroundSubagents and
+        subagentToolSubset.
       '';
     };
   }
