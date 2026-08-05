@@ -742,13 +742,29 @@ in {
         ix.systemdHardening
         // {
           Type = "simple";
-          # DynamicUser (not a static velocity user): systemd allocates the uid
-          # per boot and re-chowns the StateDirectory to it, so the managed
-          # plugins dir under `${dataDir}` is owned by the service even after a
-          # golden-snapshot restore changes the uid. A static User= leaves the
-          # snapshot's plugins dir owned by the previous uid (real host-root,
-          # outside the idmapped state mount), unwritable by the new service
-          # (`ln: ... Permission denied`, crash-looping the proxy).
+          # DynamicUser (not a static velocity user): systemd re-chowns the
+          # StateDirectory to the uid it allocates on each boot, so the managed
+          # plugins dir under `${dataDir}` is service-owned however the golden
+          # snapshot left it. The static User= this replaced inherited whatever
+          # uid owned the dir at capture and crash-looped the proxy whenever
+          # that did not match (`ln: ... Permission denied`).
+          #
+          # This comment used to blame an idmapped state mount whose mapping
+          # changes across restore. ENG-12400 went looking for that mapping and
+          # it does not exist: ix idmaps nothing. A guest's state lives in its
+          # own XFS block volume (`root=/dev/vda`, see
+          # `crates/vm/host/runtime/src/config/disk.rs`), a restore COW-branches
+          # that volume, and no code on the capture or restore path chowns or
+          # shifts an id -- so the uid bytes a restored guest reads are the ones
+          # capture wrote. The only idmapping anywhere near this service is
+          # systemd's own, and systemd.exec(5) applies it to `StateDirectory=`
+          # only under `DynamicUser=`, which is to say only in the branch taken
+          # here.
+          #
+          # So whether a static `User=` is safe is a question about uid
+          # allocation inside the guest, not about a mount mapping, and nobody
+          # has yet watched a live capture/restore pair to answer it. Until
+          # someone does, this stays DynamicUser.
           DynamicUser = true;
           WorkingDirectory = dataDir;
           ExecStart = lib.escapeShellArgs javaArgs;
