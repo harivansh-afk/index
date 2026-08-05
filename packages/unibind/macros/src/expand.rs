@@ -16,6 +16,17 @@ pub fn export(args: TokenStream, item: &TokenStream) -> TokenStream {
         Ok(selected) => selected,
         Err(error) => return with_error(&mut module, &error),
     };
+    // Parts land in the module before anything reads it, so lowering, the
+    // marker strip and the record-attribute splice all see one surface
+    // whatever it was split over.
+    let listed = match unibind_core::export_parts(args.clone()) {
+        Ok(listed) => listed,
+        Err(error) => return with_error(&mut module, &error),
+    };
+    let part_inputs = match crate::parts::splice(&mut module, &listed) {
+        Ok(inputs) => inputs,
+        Err(error) => return with_error(&mut module, &error),
+    };
     let interface = match unibind_core::lower_module(args, &module) {
         Ok(interface) => interface,
         Err(error) => return with_error(&mut module, &error),
@@ -31,6 +42,7 @@ pub fn export(args: TokenStream, item: &TokenStream) -> TokenStream {
     };
     quote! {
         #module
+        #part_inputs
         #embed
         #glue
     }

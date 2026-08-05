@@ -14,4 +14,7 @@ pub mod ir;
 mod lower;
 pub mod render;
 
-pub use lower::{Backend, LowerError, export_backends, lower_module, strip_unibind_attrs};
+pub use lower::{
+    Backend, LowerError, PartPath, export_backends, export_parts, lower_module,
+    strip_unibind_attrs,
+};

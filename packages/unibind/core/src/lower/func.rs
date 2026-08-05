@@ -228,7 +228,7 @@ fn lower_arg(arg: &syn::PatType, declared: &Declared) -> Result<ir::Arg> {
     let meta = attrs::UnibindMeta::from_attrs(&arg.attrs)?;
     meta.reject_py_base("an argument")?;
     meta.reject_jvm_base("an argument")?;
-    meta.reject_backends("an argument")?;
+    meta.reject_export_options("an argument")?;
     meta.reject_resource("an argument")?;
     meta.reject_constructor("an argument")?;
     meta.reject_blocking("an argument")?;

@@ -12,7 +12,7 @@ use crate::ir;
 /// `ex(name = "...")`, `jvm(name = "...")`, `jvm(base = "...")`,
 /// `default = ...`, `rename_all = "..."`, the bare flags `resource`,
 /// `constructor`, and `blocking`, and (on `#[unibind::export]` only)
-/// `backends(...)`.
+/// `backends(...)` and `parts = [...]`.
 #[derive(Debug, Default)]
 // The bare flags are four independent bits a caller may set in any
 // combination, which is what the lint's suggested two-variant enums cannot
@@ -39,6 +39,7 @@ pub struct UnibindMeta {
     pub(crate) associated: bool,
     pub(crate) blocking: bool,
     pub(crate) backends: Option<Vec<Backend>>,
+    pub(crate) parts: Option<Vec<PartPath>>,
 }
 
 /// One backend's option handler: applies a single parsed `backend(...)`
@@ -140,6 +141,12 @@ impl UnibindMeta {
             }
             self.backends = other.backends;
         }
+        if other.parts.is_some() {
+            if self.parts.is_some() {
+                return Err(LowerError::new(span, "duplicate unibind `parts = [...]`"));
+            }
+            self.parts = other.parts;
+        }
         if other.resource {
             if self.resource {
                 return Err(LowerError::new(span, "duplicate unibind `resource`"));
@@ -209,6 +216,9 @@ impl UnibindMeta {
         }
         if entry.path().is_ident("backends") {
             return self.apply_backends(entry, span);
+        }
+        if entry.path().is_ident("parts") {
+            return self.apply_parts(entry, span);
         }
         if entry.path().is_ident("rename_all") {
             self.rename_all = Some(rename_all(entry, span)?);
@@ -324,6 +334,70 @@ impl UnibindMeta {
         Ok(())
     }
 
+    /// Parse `parts = ["src/sdk/machines.rs", ...]`: the source files whose
+    /// items lower together with the module's own, in this order.
+    ///
+    /// The list is the declaration order of the combined surface, which is
+    /// what the generated layout mirrors, so it is written once by the crate
+    /// author rather than inferred from the filesystem or from the order the
+    /// macro happens to expand in.
+    fn apply_parts(&mut self, entry: &syn::Meta, span: Span) -> Result<()> {
+        let syn::Meta::NameValue(pair) = entry else {
+            return Err(LowerError::new(
+                span,
+                "`parts` takes a list of paths: parts = [\"src/sdk/machines.rs\"]",
+            ));
+        };
+        let syn::Expr::Array(array) = &pair.value else {
+            return Err(LowerError::new(
+                pair.value.span(),
+                "`parts` takes a bracketed list of string paths, relative to the \
+                 crate manifest: parts = [\"src/sdk/machines.rs\"]",
+            ));
+        };
+        let mut parts: Vec<PartPath> = Vec::new();
+        for element in &array.elems {
+            let syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Str(path),
+                ..
+            }) = element
+            else {
+                return Err(LowerError::new(
+                    element.span(),
+                    "each `parts` entry is a string path relative to the crate manifest",
+                ));
+            };
+            let path = PartPath {
+                path: path.value(),
+                span: element.span(),
+            };
+            // Listing a file twice would lower its items twice, so the
+            // duplicate is refused here rather than surfacing as a redeclared
+            // type further along.
+            if let Some(first) = parts.iter().find(|first| first.path == path.path) {
+                let _ = first;
+                return Err(LowerError::new(
+                    path.span,
+                    format!(
+                        "`{}` is listed twice in `parts`; each part is lowered \
+                         once, and its position is its place in declaration order",
+                        path.path
+                    ),
+                ));
+            }
+            parts.push(path);
+        }
+        if parts.is_empty() {
+            return Err(LowerError::new(
+                span,
+                "`parts = []` names no file; drop it, or list the files whose \
+                 items belong to this export",
+            ));
+        }
+        self.parts = Some(parts);
+        Ok(())
+    }
+
     pub(crate) fn names(&self) -> ir::Names {
         ir::Names {
             py: self.py_name.clone(),
@@ -349,7 +423,7 @@ impl UnibindMeta {
         self.reject_rename_all(context)?;
         self.reject_py_base(context)?;
         self.reject_jvm_base(context)?;
-        self.reject_backends(context)?;
+        self.reject_export_options(context)?;
         self.reject_resource(context)
     }
 
@@ -422,6 +496,22 @@ impl UnibindMeta {
     }
 
     /// Error out when a `backends(...)` was given somewhere it cannot apply.
+    /// Error out for the options only `#[unibind::export]` takes. One call
+    /// rather than two at each site, so a new export-only option cannot be
+    /// rejected on records but forgotten on objects.
+    pub(crate) fn reject_export_options(&self, context: &str) -> Result<()> {
+        self.reject_backends(context)?;
+        self.reject_parts(context)
+    }
+
+    /// Error out when `parts = [...]` was given somewhere it cannot apply.
+    pub(crate) fn reject_parts(&self, context: &str) -> Result<()> {
+        self.reject_if(
+            self.parts.is_some(),
+            format!("`parts = [...]` applies to #[unibind::export], not {context}"),
+        )
+    }
+
     pub(crate) fn reject_backends(&self, context: &str) -> Result<()> {
         self.reject_if(
             self.backends.is_some(),
@@ -602,4 +692,14 @@ fn literal_from_lit(lit: &syn::Lit) -> Result<ir::Literal> {
             "`default` takes a literal (bool, int, float, string) or None",
         )),
     }
+}
+
+/// One entry of `parts = [...]`: the path as written, and the span the
+/// diagnostic about it points at.
+#[derive(Debug, Clone)]
+pub struct PartPath {
+    /// The path as written, relative to the crate manifest directory.
+    pub path: String,
+    /// Where the entry sits in the attribute, for diagnostics.
+    pub span: Span,
 }

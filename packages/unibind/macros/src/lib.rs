@@ -34,13 +34,18 @@
 //! ```
 
 mod expand;
+mod parts;
 
 use proc_macro::TokenStream;
 
 /// Export an inline module as the crate's binding boundary.
 ///
 /// Every `pub fn` in the module is exported; private items pass through
-/// untouched. The attribute accepts `py(name = "...")` to rename the Python
+/// untouched. `parts = ["src/sdk/machines.rs", ...]` splits the module's
+/// body over files: each listed file is a list of items appended to the
+/// module in list order, so the surface can be one file per namespace while
+/// one lowering pass still sees all of it (see `parts` for the gates on
+/// that list). The attribute accepts `py(name = "...")` to rename the Python
 /// module (it defaults to the Rust module name, which also names the
 /// `PyInit_` symbol of the built extension), and `backends(py, ts, ex)` to
 /// pin which backends render glue. Without `backends(...)` every

@@ -13,6 +13,8 @@ use syn::spanned::Spanned as _;
 
 use crate::ir;
 
+pub use attrs::PartPath;
+
 /// A lowering failure, positioned so the macro can emit `compile_error!` at
 /// the offending tokens.
 #[derive(Debug)]
@@ -64,6 +66,21 @@ pub enum Backend {
 pub fn export_backends(module_args: proc_macro2::TokenStream) -> Result<Option<Vec<Backend>>> {
     let meta = attrs::UnibindMeta::parse(module_args, Span::call_site())?;
     Ok(meta.backends)
+}
+
+/// The source files `#[unibind::export(parts = [...])]` listed, in the order
+/// it listed them.
+///
+/// The macro reads and splices them before lowering; the list is empty for
+/// an export that keeps its whole surface inline.
+///
+/// # Errors
+///
+/// Returns a positioned error for malformed `#[unibind::export(...)]`
+/// options.
+pub fn export_parts(module_args: proc_macro2::TokenStream) -> Result<Vec<attrs::PartPath>> {
+    let meta = attrs::UnibindMeta::parse(module_args, Span::call_site())?;
+    Ok(meta.parts.unwrap_or_default())
 }
 
 /// Type names declared in the exported module, used to validate references.

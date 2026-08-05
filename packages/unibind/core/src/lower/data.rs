@@ -203,7 +203,7 @@ fn reject_flags(meta: &attrs::UnibindMeta, context: &str) -> Result<()> {
     meta.reject_resource(context)?;
     meta.reject_constructor(context)?;
     meta.reject_blocking(context)?;
-    meta.reject_backends(context)
+    meta.reject_export_options(context)
 }
 
 fn require_pub(vis: &syn::Visibility, span: proc_macro2::Span, what: &str) -> Result<()> {

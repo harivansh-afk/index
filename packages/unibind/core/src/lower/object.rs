@@ -49,7 +49,7 @@ impl Objects {
         found.meta.reject_rename_all("an object")?;
         found.meta.reject_py_base("an object")?;
         found.meta.reject_jvm_base("an object")?;
-        found.meta.reject_backends("an object")?;
+        found.meta.reject_export_options("an object")?;
         found.meta.reject_constructor("an object")?;
         found.meta.reject_blocking("an object")?;
         if !matches!(item.vis, syn::Visibility::Public(_)) {
