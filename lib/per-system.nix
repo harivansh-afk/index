@@ -1995,6 +1995,16 @@
             # it -- the gap ENG-11080 went through. See
             # tests/switch-stops-a-mount-vm.nix.
             switch-stops-a-mount-vm = tests.switchStopsAMountVm;
+            # Boots a NixOS VM and stats the `StateDirectory=` of five
+            # hardened units -- static `User=` and `DynamicUser=`, flat and
+            # nested, plus a state tree pre-owned by a stale uid -- and
+            # asserts every one is writable by its own service. Pins the
+            # measurement that refuted ENG-12400's premise: under
+            # `PrivateUsers=true` a static user owns its StateDirectory leaf
+            # exactly as a dynamic one does, and only the intermediate parent
+            # of a nested path is root-owned, identically in both. See
+            # tests/hardened-state-directory-vm.nix.
+            hardened-state-directory-vm = tests.hardenedStateDirectoryVm;
             # Builds the base OCI archive and asserts its baked nix store DB
             # registers the pinned nixpkgs source as valid, so a fresh VM's first
             # `nix` command does not re-copy the tree through VCFS (ix

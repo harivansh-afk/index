@@ -48,6 +48,13 @@
       paths
       ;
   };
+  # Measures what `ix.systemdHardening` (PrivateUsers=true) plus
+  # `StateDirectory=` actually does to ownership for a static `User=`, flat
+  # and nested, against `DynamicUser=` in the same VM (ENG-12400). qemu VM,
+  # so its own check (`checks.<system>.hardened-state-directory-vm`).
+  hardenedStateDirectoryVmTest = import ./hardened-state-directory-vm.nix {
+    inherit lib pkgs ix;
+  };
   # The only test in the suite that runs a generation switch rather than
   # reading the generation it would build. Same deal again: qemu VM, so its
   # own check (`checks.<system>.switch-stops-a-mount-vm`).
@@ -7298,6 +7305,7 @@ in {
   minecraftBlocksVm = minecraftBlocksVmTest;
   minestomSpleefVm = minestomSpleefVmTest;
   switchStopsAMountVm = switchStopsAMountVmTest;
+  hardenedStateDirectoryVm = hardenedStateDirectoryVmTest;
   inherit baseImageNixDb;
   imageRegistryPin = imageRegistryPinTest;
   dev-profile-fortify = devProfileFortifyTest.premiseStillHolds;
