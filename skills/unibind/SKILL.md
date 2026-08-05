@@ -176,6 +176,109 @@ example's surface: use the standard library's path, time and JSON handling
 rather than string manipulation, because the example is the documentation
 that gets executed.
 
+## A doc link resolves, or the build fails
+
+Doc comments reach four published surfaces, so a rustdoc link in one is a
+claim about the *generated* API, not about Rust. unibind resolves every
+intra-doc link against the interface and renders it in each language's own
+spelling:
+
+| written | TypeScript | Python |
+|---|---|---|
+| ``[`Machine`]`` | `{@link Machine}` | `` `Machine` `` |
+| ``[`Machine::forward_port`]`` | `{@link Machine.forwardPort}` | `` `Machine.forward_port` `` |
+| ``[`MachineInfo::failure_reason`]`` | `{@link MachineInfo.failureReason}` | `` `MachineInfo.failure_reason` `` |
+| ``[`SnapshotStatus::Ready`]`` | `` `"ready"` `` | `` `SnapshotStatus.READY` `` |
+| ``[`IxError::NotFound`]`` | `{@link NotFound}` | `` `NotFound` `` |
+| ``[`Self::close`]`` | resolved against the enclosing type | same |
+
+TypeScript gets TSDoc, which editors resolve; Python gets a code span,
+because a `.pyi` has no link syntax a reader's tooling follows and Sphinx
+roles would be a second vocabulary in a file nobody runs Sphinx over. An
+enumeration variant is the one target with no identifier in TypeScript -- a
+union member is a string -- so it renders the value a caller actually types.
+Elixir and the JVM render code spans too, and have no conformance coverage
+for links yet.
+
+**A link that names nothing fails generation**, naming the doc site and the
+dead target, the way rustdoc's `broken_intra_doc_links` does at `deny`. Every
+dead link is reported in one build, because a rename usually leaves several.
+That gate is the point: a denylist of one renamed noun (which is what
+`artifact-sdk-vocabulary` was) cannot catch a link to a method that never
+existed, and 214 dead links shipped in each published file before it existed.
+
+Three spellings and what they do:
+
+- ``[`Type::member`]`` is the form to write.
+- `[the docs](Type::member)` resolves the same way, and **the link text is
+  dropped** -- the target's spelling replaces the whole link, so write the
+  sentence around the reference rather than through it.
+- ``[`Type::member`][label]``, the reference form, is **refused**: its target
+  lives in a link definition, and nothing writes those into a `.d.ts` or a
+  `.pyi`, so it would ship as dead text with no error.
+
+Two things that are deliberately not links: a Rust-side item the SDK reader
+cannot see (write `` `ix_sdk::SdkError` `` as a plain code span; brackets
+would claim it is part of the surface), and a bare `[1]` in prose. A
+constructor link renders as its type (``[`Session::new`]`` becomes `{@link
+Session}`), because no target language names a constructor -- so phrase the
+sentence for that rather than writing "as [`Self::new`] received it".
+
+Records are the one doc site where the runtime text and the stub could
+disagree, because a record's `#[pyclass]` lands on the user's own struct and
+pyo3 reads its `///` text. The macro writes the resolved lines back over
+those attributes, so `help(Point)` and the `.pyi` say the same thing.
+
+## One surface, several files
+
+`#[unibind::export]` lowers one module, and lowering has to see all of it at
+once: a type reference in a signature is classified against every declaration
+in the export, so no per-file pass could resolve `MachineInfo` without the
+file that declares it. The export therefore names its other files:
+
+```rust
+#[unibind::export(parts = ["src/sdk/machines.rs", "src/sdk/snapshots.rs"])]
+mod _ix_sdk {}
+```
+
+Each listed file is a list of items -- the same items that would have been
+written inline, at the file's own indentation -- read and appended to the
+module before lowering. **Declaration order is the module's own items
+followed by the parts in listed order**, which matters because the generated
+layout mirrors it: the list is the crate author's statement of that order,
+not filesystem order and not the order macros expand in.
+
+Three compile errors keep the list honest:
+
+- a part listed twice, naming it;
+- a listed path that does not exist, naming it;
+- **a `.rs` file that sits with the parts but is not listed**, naming it.
+  Adding a file and forgetting to register it is the failure this catches; it
+  would otherwise be silently absent from the SDK.
+
+So keep parts in a directory of their own, and put nothing else there.
+
+The cost, stated plainly: rustc does not read the part files, the macro does,
+and stable Rust gives a proc macro no way to manufacture a span into a file
+it read. A type error inside a part is reported against the
+`#[unibind::export]` attribute; the offending code is still printed, but the
+file and line are not the part's. unibind's own diagnostics name the item and
+the part path instead.
+
+**Add to the file that owns the namespace.** The old rule in
+`crates/ix/sdk-bind` was to append a new `impl` block at the end of the one
+file rather than edit the blocks above, because a module boundary was not
+available and several agents write here at once; that produced six `impl
+Machine` blocks spread over 5,000 lines. The file boundary does that job now:
+a machines verb goes in `machines.rs`, and `Machine`'s verbs all live in
+`machine.rs`. Within a file, appending to the existing `impl` block is fine.
+
+Reordering items across parts is not free. Records, enumerations, errors and
+objects each keep their declaration order in the IR, and each object's
+methods keep the order of the `impl` blocks that contribute them, so moving
+one of those changes two published files while changing nothing. Private
+items carry no IR position and move freely.
+
 ## Adding an intent
 
 The IR's function kind lives in lowering, not in the IR data: `Kind` in
@@ -193,7 +296,9 @@ positional. A new intent is therefore a new arm there plus a new field on
 4. Each conformance suite (`conformance/`, `conformance-ts/`, `conformance-jvm/`,
    `conformance-ex/`): the fixture Rust surface plus assertions in the target
    language. A feature with no conformance test in a language is not supported
-   in that language, whatever the renderer does.
+   in that language, whatever the renderer does. A lowering feature that is
+   not language-specific still needs one suite exercising it: `conformance-ex`
+   is split over `src/surface/*.rs`, which is what keeps `parts` covered.
 5. Break it and watch it fail. A renderer's snapshot test passes just as well
    against the wrong output.
 
