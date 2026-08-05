@@ -47,6 +47,7 @@
   #   features.cron = false;  false bakes CLAUDE_CODE_DISABLE_CRON (drops the scheduling/loop tools)
   #   features.fableFallback = true;  true is stock; false bakes CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK so a safety-flagged turn stops visibly instead of re-serving on Opus
   #   features.autoCompactWindow = 300000;  token count baked as CLAUDE_CODE_AUTO_COMPACT_WINDOW (the standard 300K working window); null bakes nothing
+  #   features.agentTeams = false;  true bakes CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 (experimental mesh teammate sessions); off matches upstream, and subagent SendMessage works without it
   #   systemTools = { };  option systemTools; false renders the bare tool name into permissions.deny, dropping its schema from context
   #   systemTools.Agent = true;  subagent spawning
   #   systemTools.Artifact = false;  claude.ai artifact publishing; enabling surfaces Anthropic design-style skills
