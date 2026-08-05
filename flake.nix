@@ -202,51 +202,32 @@
     # marks it `autoUpdate = false`): jj-rebase indexable-inc/nix only when we
     # intend to move the daemon version too, then repin here.
     nix-src = {
-      # ix-patched 1c1dba1da9dd (11 commits on from 2d7585afe7b1, same branch,
-      # same 2c6d06e9387c base, still version 2.34.7, so the drop-in property
-      # the block above is about does not move). Previous pin survives as
-      # refs/pins/2026-07-31-2d7585afe7b1, this one as
-      # refs/pins/2026-08-01-1c1dba1da9dd.
+      # ix-patched 69e4d9e9db39 (16 commits on from 7ba1e9115c51, same branch,
+      # still version 2.34.7, daemon protocol unchanged, so this remains a
+      # protocol-compatible drop-in). Previous pin survives as
+      # refs/pins/2026-08-01-1c1dba1da9dd lineage; this one as
+      # refs/pins/2026-08-04-69e4d9e9db39.
       #
-      # This tip carries the jj fetcher rewrite: reading a jj revision goes
-      # through the Git backing store rather than a subprocess per file, which
-      # measured 197s to 4s cold and 170s to 0.3s warm on this repo's own
-      # `ix/` view. Every jj-input flake evaluation pays that, so the bump is
-      # worth taking ahead of the scheduled sync.
+      # The range carries: `nix eval-persistent --retain` (nix#46), a retained
+      # evaluator whose post-edit re-eval costs 52.9% of a fresh run; value
+      # provenance (nix#47), which took its stale splices from 38 of 1,316 to
+      # 0 of 2,065 with +0.5% cpu when the flag is off; the ThreadPool
+      # feeder-unwind fix (nix#45, the ENG-9972 use-after-free class, six
+      # guarded feed sites); jj gitlinks kept on the Git fast path
+      # (f602cadbb); and derivation input-source recording (5d39e1691).
+      # Everything new is off by default: eval-persistent is its own
+      # subcommand and provenance tracking runs only inside it, so a consumer
+      # that never invokes it sees no behavior change.
       #
-      # This range is where nine PRs merged inside a few minutes, and the pin
-      # deliberately sits after the three commits that made their union work
-      # rather than anywhere inside it. The union did not compile
-      # (nix-expr-tests, run 30664328290) because the parallel evaluator port
-      # took value.hh from the tree it was written against, which predates two
-      # upstream additions, so a textually clean merge reverted them. Fixing
-      # that exposed three more reversions underneath, none of them compile
-      # errors: `printFailed` rendering «failed» against its own comment, the
-      # evaluator's error positions with no expectation updates, and
-      # `Failed::rethrow()` losing the clone that stops a re-forced failure's
-      # trace mutating the cached exception. All five are ENG-11672. Anything
-      # pinned between the parallel-eval merge and 2d7585afe7b1 builds and runs
-      # but carries the last three as live regressions.
-      #
-      # What a consumer will notice. Infinite recursion and stack overflow are
-      # now reported at the site that forced the value rather than at the
-      # recursive thunk's own expression, because claiming a thunk overwrites
-      # the words that held its environment and expression; that is
-      # unconditional, not gated on `eval-cores`, and doc/manual/rl-next
-      # records it. The evaluator itself is off by default: `eval-cores`
-      # defaults to 1 and is admitted only with the `parallel-eval`
-      # experimental feature. The lazy-trees stack is untouched by the range
-      # (paths.cc is byte-identical across it), so indexable-inc/index#4297
-      # stands unchanged.
-      #
-      # Gated by nix's own tests only, which is the same caveat the previous
-      # bump recorded: run 30668180224 is green on this rev across both tests
-      # jobs, VM tests, flake checks, installer tests and the sanitizer
-      # configuration. Neither the parallel evaluator nor the read-set
-      # instrumentation series has a lib/fork-packages.nix intent entry, so
-      # both default to `hold` and cannot be sent upstream until someone
-      # classifies them.
-      url = "github:indexable-inc/nix/7ba1e9115c513c527ba93dd23218bab8e3bb1499";
+      # Gating: this repo removed hosted CI at efdc2e9b2 (validation moves to
+      # fleet dev nodes), so the gate for this bump is the dev-node evidence
+      # on the exact pinned tree: the four-row persistent-eval harness on
+      # dev-compute-2 with every row checked against a fresh process, and the
+      # read-set-trace and readfile-context functional tests. The ix deploy
+      # build compiles this rev before any host receives it; ENG-12393
+      # records that the prior tip did not compile and the first commit of
+      # nix#47 fixed it.
+      url = "github:indexable-inc/nix/69e4d9e9db39f0037dd83720bdba3468ee0bab3d";
       flake = false;
     };
 
