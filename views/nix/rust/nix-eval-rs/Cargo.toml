@@ -1,0 +1,34 @@
+[package]
+name = "nix-eval-rs"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Rust evaluator for the Nix language, exposed to cppnix over a C ABI"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+# MIT-licensed lossless CST parser; the GPL exclusion applies to snix/tvix
+# eval code, not to rnix, which snix merely also uses.
+rnix = "0.12"
+rowan = "0.15"
+
+# builtins.match / builtins.split. cppnix compiles these with
+# `std::regex::extended`, i.e. POSIX ERE, and the corpus exercises POSIX
+# bracket classes ([[:space:]], [[:upper:]]); this crate accepts them, an
+# ECMAScript engine does not.
+regex = "1"
+
+# builtins.fromJSON / builtins.fromTOML. serde_json keeps the int-vs-float
+# distinction cppnix's parser also keeps (1 is an integer, 1.0 a float).
+serde_json = "1"
+toml = "1"
+
+# builtins.hashString, the four algorithms cppnix's parseHashAlgo accepts.
+md-5 = "0.10"
+sha1 = "0.10"
+sha2 = "0.10"
+
+[lints]
+workspace = true

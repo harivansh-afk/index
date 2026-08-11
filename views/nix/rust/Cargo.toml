@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = ["nix-eval-rs", "ix-kernel"]
+
+[workspace.package]
+edition = "2024"
+license = "LGPL-2.1-or-later"
+
+# Mirrored from the index monorepo workspace lints so the same bar applies
+# here before the ciCheck derivations arrive. Stock clippy aborts (E0602) on
+# the two llm-clippy-only lints, so those two are added when the forked
+# toolchain is wired into CI rather than now.
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"

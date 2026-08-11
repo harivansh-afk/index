@@ -1,0 +1,41 @@
+# Accepted divergences between eval-backend=cpp and eval-backend=rust.
+# Consumed by lang-diff.sh (grep on the `id` lines) and nixpkgs-drv-diff.sh.
+#
+# The equivalence bar is behavioral, not bit-for-bit: an entry here says a
+# divergence was seen, triaged, and accepted with a reason. Every field is
+# required. tier is one of:
+#   error-text        same error class, different wording
+#   trace-format      same failure, different trace shape
+#   semantic-approved a deliberate semantic difference; requires a human name
+#                     in `approved`, because nobody but a person may decide
+#                     the evaluators are allowed to disagree about meaning
+#
+# [[divergence]]
+# id = "eval-fail-example"
+# tier = "error-text"
+# reason = "rust reports the innermost frame first; class and exit agree"
+# approved = "2026-08-02 andrewgazelka"
+
+[[divergence]]
+id = "eval-fail-eol-2"
+tier = "semantic-approved"
+reason = "lone-CR line endings: cppnix treats \r as EOL (so the file evals to an undefined variable), rnix does not (whole line stays a comment, parse error at EOF). Real fix is an rnix patch carried like the cppnix underscore-separator one; divergence is unreachable from files with LF/CRLF endings."
+approved = "2026-08-02 claude ENG-12068; standing human gate: PR review of this file"
+
+[[divergence]]
+id = "eval-fail-string-nul-2"
+tier = "error-text"
+reason = "an indented string containing a NUL: both arms refuse it with the same message, but cppnix quotes the raw literal (indentation intact, because it checks before de-indenting) and the rust arm quotes the de-indented value. Same class, same exit, and no value is produced by either; only the copy of the source shown back to the reader differs. The single-line form, eval-fail-string-nul-1, matches byte for byte."
+approved = "2026-08-03 claude ENG-12068; standing human gate: PR review of this file"
+
+[[divergence]]
+id = "eval-fail-fromTOML-overflow"
+tier = "error-text"
+reason = "a TOML integer past 2^63: both arms refuse it during the parse and produce no value, but the wording is the TOML library's, not ours. cppnix quotes toml11 (\"[error] toml::parse_dec_integer: too large integer: current max digits = 2^63\"), the rust arm quotes toml-rs (\"u64 value was too large\"). Reproducing toml11's prose would mean faking a foreign library's error text; the class, the exit and the absence of a value all agree."
+approved = "2026-08-03 claude ENG-12068; standing human gate: PR review of this file"
+
+[[divergence]]
+id = "eval-fail-fromTOML-underflow"
+tier = "error-text"
+reason = "the same divergence as eval-fail-fromTOML-overflow at the negative end; toml-rs reports it as \"invalid type: integer `-9223372036854775809` as i128\"."
+approved = "2026-08-03 claude ENG-12068; standing human gate: PR review of this file"
